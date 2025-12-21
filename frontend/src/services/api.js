@@ -18,6 +18,7 @@ export const bucketAPI = {
   updateConfig: (name, config) => api.put(`/buckets/${name}/config`, config),
   selectBucket: (name) => api.post(`/buckets/${name}/select`),
   addDirectory: (bucketName, path) => api.post(`/buckets/${bucketName}/directories`, { path }),
+  addDirectories: (bucketName, paths) => api.put(`/buckets/${bucketName}/directories`, { paths }),
   removeDirectory: (bucketName, path) => api.delete(`/buckets/${bucketName}/directories`, { data: { paths: [path] } }),
   removeDirectories: (bucketName, paths) => api.delete(`/buckets/${bucketName}/directories`, { data: { paths } }),
   deleteBucket: (name) => api.delete(`/buckets/${name}`),

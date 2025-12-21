@@ -65,6 +65,10 @@ class AddDirectoryRequest(BaseModel):
     path: str = Field(..., min_length=1)
 
 
+class AddDirectoriesRequest(BaseModel):
+    paths: List[str] = Field(..., min_items=1)
+
+
 class RemoveDirectoriesRequest(BaseModel):
     paths: List[str] = Field(..., min_items=1)
 

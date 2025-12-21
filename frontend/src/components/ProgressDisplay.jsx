@@ -34,6 +34,25 @@ export function ProgressDisplay() {
           <value>
             {progress.filesProcessed} / {progress.filesTotal}
           </value>
+          {/* Files Processed Progress Bar */}
+          {progress.filesTotal > 0 && (
+            <div style={{
+              width: '100%',
+              height: '8px',
+              backgroundColor: '#1e293b',
+              borderRadius: '4px',
+              marginTop: '0.5rem',
+              overflow: 'hidden'
+            }}>
+              <div style={{
+                width: `${(progress.filesProcessed / progress.filesTotal) * 100}%`,
+                height: '100%',
+                backgroundColor: '#3b82f6',
+                borderRadius: '4px',
+                transition: 'width 0.3s ease'
+              }}></div>
+            </div>
+          )}
         </div>
 
         {progress.chunksTotal > 0 && (
