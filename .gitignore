@@ -1,0 +1,60 @@
+# --- Python / Backend ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# --- Node / Frontend ---
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# --- Environment Variables ---
+.env
+.env.*
+!.env.example
+
+# --- IDEs & Editors ---
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# --- Project Specific (Local RAG Data) ---
+# Ignore docker volumes
+volumes/
+volumes/*
+# Ignore local workspace files if you don't want to commit them
+# (Keep this commented out if you want to track workspace files like Hello.md)
+# workspace/

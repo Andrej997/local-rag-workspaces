@@ -1,0 +1,105 @@
+services:
+  etcd:
+    container_name: ${ETCD_CONTAINER_NAME:-local-rag-metadata-store}
+    image: quay.io/coreos/etcd:${ETCD_VERSION:-v3.5.5}
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=${ETCD_AUTO_COMPACTION_MODE:-revision}
+      - ETCD_AUTO_COMPACTION_RETENTION=${ETCD_AUTO_COMPACTION_RETENTION:-1000}
+      - ETCD_QUOTA_BACKEND_BYTES=${ETCD_QUOTA_BACKEND_BYTES:-4294967296}
+      - ETCD_SNAPSHOT_COUNT=${ETCD_SNAPSHOT_COUNT:-50000}
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/etcd:/etcd
+    command: etcd -advertise-client-urls=http://127.0.0.1:${ETCD_CLIENT_PORT:-2379} -listen-client-urls http://0.0.0.0:${ETCD_CLIENT_PORT:-2379} --data-dir /etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: ${ETCD_HEALTHCHECK_INTERVAL:-30s}
+      timeout: ${ETCD_HEALTHCHECK_TIMEOUT:-20s}
+      retries: ${ETCD_HEALTHCHECK_RETRIES:-3}
+
+  minio:
+    container_name: ${MINIO_CONTAINER_NAME:-local-rag-object-storage}
+    image: minio/minio:${MINIO_VERSION:-RELEASE.2023-03-20T20-16-18Z}
+    environment:
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+    ports:
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+      - "${MINIO_API_PORT:-9000}:9000"
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/minio:/minio_data
+    command: minio server /minio_data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: ${MINIO_HEALTHCHECK_INTERVAL:-30s}
+      timeout: ${MINIO_HEALTHCHECK_TIMEOUT:-20s}
+      retries: ${MINIO_HEALTHCHECK_RETRIES:-3}
+
+  standalone:
+    container_name: ${MILVUS_CONTAINER_NAME:-local-rag-vector-db}
+    image: milvusdb/milvus:${MILVUS_VERSION:-v2.3.5}
+    command: ["milvus", "run", "standalone"]
+    security_opt:
+    - seccomp:unconfined
+    environment:
+      ETCD_ENDPOINTS: ${ETCD_ENDPOINTS:-etcd:2379}
+      MINIO_ADDRESS: ${MINIO_ADDRESS:-minio:9000}
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/milvus:/var/lib/milvus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: ${MILVUS_HEALTHCHECK_INTERVAL:-30s}
+      start_period: ${MILVUS_HEALTHCHECK_START_PERIOD:-90s}
+      timeout: ${MILVUS_HEALTHCHECK_TIMEOUT:-20s}
+      retries: ${MILVUS_HEALTHCHECK_RETRIES:-3}
+    ports:
+      - "${MILVUS_PORT:-19530}:19530"
+      - "${MILVUS_METRICS_PORT:-9091}:9091"
+    depends_on:
+      - "etcd"
+      - "minio"
+
+  backend:
+    container_name: ${BACKEND_CONTAINER_NAME:-local-rag-backend}
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      - PYTHONUNBUFFERED=${PYTHONUNBUFFERED:-1}
+      - MILVUS_HOST=${MILVUS_HOST:-standalone}
+      - MILVUS_PORT=${MILVUS_PORT:-19530}
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://host.docker.internal:11434}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      standalone:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: ${BACKEND_HEALTHCHECK_INTERVAL:-30s}
+      timeout: ${BACKEND_HEALTHCHECK_TIMEOUT:-10s}
+      retries: ${BACKEND_HEALTHCHECK_RETRIES:-3}
+      start_period: ${BACKEND_HEALTHCHECK_START_PERIOD:-40s}
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  frontend:
+    container_name: ${FRONTEND_CONTAINER_NAME:-local-rag-frontend}
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: ${FRONTEND_HEALTHCHECK_INTERVAL:-30s}
+      timeout: ${FRONTEND_HEALTHCHECK_TIMEOUT:-3s}
+      retries: ${FRONTEND_HEALTHCHECK_RETRIES:-3}
+      start_period: ${FRONTEND_HEALTHCHECK_START_PERIOD:-10s}
+    restart: unless-stopped
+
+networks:
+  default:
+    name: ${NETWORK_NAME:-local-rag-network}
