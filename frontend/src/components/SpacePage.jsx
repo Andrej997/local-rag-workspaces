@@ -94,12 +94,14 @@ export function SpacePage() {
 
       <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))' }}>
 
-        {/* LEFT COLUMN: Sources List */}
+        {/* LEFT COLUMN: Sources List & Upload */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <div className="card" style={{ padding: '1.5rem', flex: 1 }}>
             <h3 style={{ borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem', marginBottom: '1rem' }}>
               📂 Indexed Paths / Sources
             </h3>
+
+            {/* File Tree Display */}
             {currentBucket.directories.length === 0 ? (
               <p style={{ color: '#64748b', fontStyle: 'italic' }}>No sources added yet. Upload files or folders below.</p>
             ) : (
@@ -114,10 +116,79 @@ export function SpacePage() {
                 }}
               />
             )}
+
+            {/* Upload Section */}
+            <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border)' }}>
+              <h4 style={{ marginBottom: '1rem', fontSize: '1rem', fontWeight: '600' }}>☁️ Upload to MinIO</h4>
+
+              <div style={{ display: 'flex', gap: '1rem', flexDirection: 'column' }}>
+                {/* Directory Upload */}
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', fontSize: '0.9rem' }}>Upload Folder</label>
+                  <input
+                    type="file"
+                    webkitdirectory=""
+                    directory=""
+                    multiple
+                    onChange={async (e) => {
+                      if (!e.target.files.length) return;
+                      const formData = new FormData();
+                      for (let i = 0; i < e.target.files.length; i++) {
+                        formData.append('files', e.target.files[i]);
+                      }
+
+                      setIsAdding(true);
+                      try {
+                        const res = await import('../services/api').then(m => m.uploadAPI.upload(currentBucket.name, formData));
+                        alert(res.data.message);
+                        await refreshBuckets();
+                      } catch (err) {
+                        alert("Upload failed: " + (err.response?.data?.detail || err.message));
+                      } finally {
+                        setIsAdding(false);
+                        e.target.value = null;
+                      }
+                    }}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+
+                {/* Files Upload */}
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', fontSize: '0.9rem' }}>Upload Files</label>
+                  <input
+                    type="file"
+                    multiple
+                    onChange={async (e) => {
+                      if (!e.target.files.length) return;
+                      const formData = new FormData();
+                      for (let i = 0; i < e.target.files.length; i++) {
+                        formData.append('files', e.target.files[i]);
+                      }
+
+                      setIsAdding(true);
+                      try {
+                        const res = await import('../services/api').then(m => m.uploadAPI.upload(currentBucket.name, formData));
+                        alert(res.data.message);
+                        await refreshBuckets();
+                      } catch (err) {
+                        alert("Upload failed: " + (err.response?.data?.detail || err.message));
+                      } finally {
+                        setIsAdding(false);
+                        e.target.value = null;
+                      }
+                    }}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+
+                {isAdding && <p style={{ color: 'var(--accent)', fontSize: '0.9rem' }}>Uploading... please wait.</p>}
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Controls, Progress & Add Path */}
+        {/* RIGHT COLUMN: Actions & Progress */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
           {/* Action Panel */}
@@ -153,81 +224,6 @@ export function SpacePage() {
             {/* PROGRESS DISPLAY COMPONENT */}
             <div style={{ background: 'var(--bg-primary)', borderRadius: '0.5rem', border: '1px solid var(--border)', minHeight: '100px' }}>
               <ProgressDisplay />
-            </div>
-          </div>
-
-          {/* Upload Panel */}
-          <div className="card" style={{ padding: '1.5rem' }}>
-            <h3 style={{ marginBottom: '1rem' }}>☁️ Upload to MinIO & Index</h3>
-
-            <div style={{ display: 'flex', gap: '1rem', flexDirection: 'column' }}>
-
-              {/* Directory Upload */}
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', fontSize: '0.9rem' }}>Upload Folder</label>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <input
-                    type="file"
-                    webkitdirectory=""
-                    directory=""
-                    multiple
-                    onChange={async (e) => {
-                      if (!e.target.files.length) return;
-                      const formData = new FormData();
-                      for (let i = 0; i < e.target.files.length; i++) {
-                        formData.append('files', e.target.files[i]);
-                      }
-
-                      setIsAdding(true);
-                      try {
-                        const res = await import('../services/api').then(m => m.uploadAPI.upload(currentBucket.name, formData));
-                        alert(res.data.message);
-                        await refreshBuckets();
-                      } catch (err) {
-                        alert("Upload failed: " + (err.response?.data?.detail || err.message));
-                      } finally {
-                        setIsAdding(false);
-                        e.target.value = null; // reset
-                      }
-                    }}
-                    style={{ flex: 1 }}
-                  />
-                </div>
-              </div>
-
-              {/* Files Upload */}
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', fontSize: '0.9rem' }}>Upload Files</label>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <input
-                    type="file"
-                    multiple
-                    onChange={async (e) => {
-                      if (!e.target.files.length) return;
-                      const formData = new FormData();
-                      for (let i = 0; i < e.target.files.length; i++) {
-                        formData.append('files', e.target.files[i]);
-                      }
-
-                      setIsAdding(true);
-                      try {
-                        const res = await import('../services/api').then(m => m.uploadAPI.upload(currentBucket.name, formData));
-                        alert(res.data.message);
-                        await refreshBuckets();
-                      } catch (err) {
-                        alert("Upload failed: " + (err.response?.data?.detail || err.message));
-                      } finally {
-                        setIsAdding(false);
-                        e.target.value = null;
-                      }
-                    }}
-                    style={{ flex: 1 }}
-                  />
-                </div>
-              </div>
-
-              {isAdding && <p style={{ color: 'var(--accent)', fontSize: '0.9rem' }}>Uploading... please wait.</p>}
-
             </div>
           </div>
 

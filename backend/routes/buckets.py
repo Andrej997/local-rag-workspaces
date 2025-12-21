@@ -3,7 +3,7 @@ API routes for Bucket (Project) management.
 """
 from fastapi import APIRouter, HTTPException
 from typing import List
-from models.schemas import Bucket, BucketConfig, CreateBucketRequest, AddDirectoryRequest, RemoveDirectoriesRequest
+from models.schemas import Bucket, BucketConfig, CreateBucketRequest, AddDirectoryRequest, AddDirectoriesRequest, RemoveDirectoriesRequest
 from services.bucket_manager import bucket_manager
 
 router = APIRouter()
@@ -53,6 +53,14 @@ async def add_directory(name: str, request: AddDirectoryRequest):
     """Add a directory to a bucket."""
     try:
         return bucket_manager.add_directory(name, request.path)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+@router.put("/{name}/directories", response_model=Bucket)
+async def add_directories(name: str, request: AddDirectoriesRequest):
+    """Add multiple directories/files to a bucket."""
+    try:
+        return bucket_manager.add_directories(name, request.paths)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
