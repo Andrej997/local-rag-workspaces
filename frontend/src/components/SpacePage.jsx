@@ -3,6 +3,7 @@ import { useIndexing } from '../context/IndexingContext';
 import { bucketAPI, indexingAPI } from '../services/api';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { ProgressDisplay } from './ProgressDisplay';
+import { FileViewer } from './FileViewer';
 
 export function SpacePage() {
   const { state, refreshBuckets } = useIndexing();
@@ -10,6 +11,7 @@ export function SpacePage() {
   const [manualPath, setManualPath] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
+  const [viewingFile, setViewingFile] = useState(null);
 
   // Activate WebSocket to listen for progress/errors
   useWebSocket();
@@ -102,17 +104,21 @@ export function SpacePage() {
             </h3>
 
             {/* File Tree Display */}
-            {currentBucket.directories.length === 0 ? (
+            {(!currentBucket.files || currentBucket.files.length === 0) ? (
               <p style={{ color: '#64748b', fontStyle: 'italic' }}>No sources added yet. Upload files or folders below.</p>
             ) : (
               <FileTree
-                paths={currentBucket.directories}
+                files={currentBucket.files}
+                bucketName={currentBucket.name}
                 onDelete={(paths) => {
                   if (confirm(`Remove ${paths.length} item(s)?`)) {
                     bucketAPI.removeDirectories(currentBucket.name, paths)
                       .then(() => refreshBuckets())
                       .catch(err => alert("Failed to remove: " + err.message));
                   }
+                }}
+                onView={(filePath, fileName) => {
+                  setViewingFile({ filePath, fileName });
                 }}
               />
             )}
@@ -230,6 +236,16 @@ export function SpacePage() {
         </div>
 
       </div>
+
+      {/* File Viewer Modal */}
+      {viewingFile && (
+        <FileViewer
+          bucketName={currentBucket.name}
+          filePath={viewingFile.filePath}
+          fileName={viewingFile.fileName}
+          onClose={() => setViewingFile(null)}
+        />
+      )}
     </div>
   );
 }
@@ -254,28 +270,15 @@ function buildTree(paths) {
   return root;
 }
 
-function FileTree({ paths, onDelete }) {
-  // Simple recursive tree rendering
-  // We need to group common prefixes relative to the shortest common prefix?
-  // Or just naïve tree.
-
-  // Naïve tree might be too deep if all paths are /app/data/uploads/...
-  // Let's find common prefix first?
-  // For now, let's just render the tree structure as is, or maybe just flat list if tree is too complex.
-  // Actually, user asked for "list all files... be able to delete sub files or sub folders".
-
+function FileTree({ files, bucketName, onDelete, onView }) {
   const structure = {};
 
-  // Identify common prefix to strip?
-  // We want to strip '/app/data/uploads/<space-name>/'
-  // But wait, the path might be just '/workspace' if manually added.
-  // Strategy: If path contains '/data/uploads/', strip everything up to and including the bucket folder.
-
-  paths.forEach(path => {
-    let displayPath = path;
+  // Build tree structure from file metadata
+  files.forEach(file => {
+    let displayPath = file.path;
 
     // Normalize slashes
-    const normalized = path.replace(/\\/g, '/');
+    const normalized = file.path.replace(/\\/g, '/');
 
     // Check for explicit 'uploads/' prefix (MinIO structure)
     if (normalized.startsWith('uploads/')) {
@@ -294,10 +297,15 @@ function FileTree({ paths, onDelete }) {
     let current = structure;
     parts.forEach((part, index) => {
       if (!current[part]) {
-        current[part] = { _children: {}, _path: null };
+        current[part] = {
+          _children: {},
+          _path: null,
+          _metadata: null
+        };
       }
       if (index === parts.length - 1) {
-        current[part]._path = path; // STORE ORIGINAL FULL PATH for deletion
+        current[part]._path = file.path; // STORE ORIGINAL FULL PATH for deletion
+        current[part]._metadata = file; // Store full metadata
       }
       current = current[part]._children;
     });
@@ -330,15 +338,62 @@ function FileTree({ paths, onDelete }) {
       onDelete(uniquePaths);
     };
 
+    const handleView = () => {
+      if (isFile && onView) {
+        onView(node._path, name);
+      }
+    };
+
+    // Format timestamp for display
+    const formatDate = (dateString) => {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffInSeconds = (now - date) / 1000;
+
+      if (diffInSeconds < 60) return 'just now';
+      if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+      if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+      if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`;
+
+      // Format as date
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
+    };
+
+    // Format file size
+    const formatSize = (bytes) => {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    };
+
     return (
       <li key={name} style={{ marginLeft: '1.5rem', listStyle: 'none' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '2px 0' }}>
           <span style={{ color: hasChildren ? '#fbbf24' : '#94a3b8' }}>{hasChildren ? '📁' : '📄'}</span>
-          <span style={{ color: '#e2e8f0', fontSize: '0.9rem' }}>{name}</span>
+          <span
+            style={{
+              color: '#e2e8f0',
+              fontSize: '0.9rem',
+              cursor: isFile ? 'pointer' : 'default',
+              textDecoration: isFile ? 'underline' : 'none',
+              textDecorationColor: isFile ? '#3b82f6' : 'transparent',
+              flex: 1
+            }}
+            onClick={handleView}
+            title={isFile ? "Click to view file" : ""}
+          >
+            {name}
+          </span>
+          {isFile && node._metadata && (
+            <div style={{ display: 'flex', gap: '0.75rem', fontSize: '0.75rem', color: '#64748b' }}>
+              <span title={`Size: ${formatSize(node._metadata.size)}`}>{formatSize(node._metadata.size)}</span>
+              <span title={new Date(node._metadata.last_modified).toLocaleString()}>{formatDate(node._metadata.last_modified)}</span>
+            </div>
+          )}
           <button
             onClick={handleDelete}
             style={{
-              marginLeft: 'auto', color: '#ef4444', background: 'none', border: 'none',
+              color: '#ef4444', background: 'none', border: 'none',
               cursor: 'pointer', fontSize: '1rem', padding: '0 4px'
             }}
             title={hasChildren ? "Delete folder" : "Delete file"}

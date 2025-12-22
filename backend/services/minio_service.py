@@ -119,6 +119,25 @@ class MinioService:
             print(f"Failed to list objects in {bucket_name}: {e}")
             return []
 
+    def list_objects_with_metadata(self, bucket_name: str, prefix: str = "") -> list[dict]:
+        """List all objects in a bucket with metadata (path, size, last_modified)."""
+        if not self.minio_client:
+            return []
+        try:
+            safe_name = self._sanitize_bucket_name(bucket_name)
+            objects = self.minio_client.list_objects(safe_name, prefix=prefix, recursive=True)
+            return [
+                {
+                    "path": obj.object_name,
+                    "size": obj.size,
+                    "last_modified": obj.last_modified
+                }
+                for obj in objects
+            ]
+        except Exception as e:
+            print(f"Failed to list objects with metadata in {bucket_name}: {e}")
+            return []
+
     def download_bucket(self, bucket_name: str, local_dir: str, prefix: str = ""):
         """Download files from bucket (matching prefix) to local directory."""
         if not self.minio_client:
