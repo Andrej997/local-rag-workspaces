@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 
 # Import routers
-from routes import config, indexing, browse, buckets, search, stats, upload, visualization
+from routes import config, indexing, browse, buckets, search, stats, upload, visualization, metadata
 from services.indexing_manager import get_indexing_manager
 
 app = FastAPI(
@@ -32,6 +32,7 @@ app.include_router(search.router, prefix="/api/search", tags=["Search"])
 app.include_router(stats.router, prefix="/api/stats", tags=["Stats"])
 app.include_router(upload.router, prefix="/api/upload", tags=["Upload"])
 app.include_router(visualization.router, prefix="/api", tags=["Visualization"])
+app.include_router(metadata.router, prefix="/api/metadata", tags=["Metadata"])
 
 @app.on_event("startup")
 async def startup_event():

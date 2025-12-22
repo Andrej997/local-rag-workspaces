@@ -34,6 +34,9 @@ class IndexingManager:
         self.last_progress: Optional[Dict[str, Any]] = None
         self._initialized = True
 
+        # Load persisted progress on startup
+        self._load_progress_state()
+
     def add_websocket(self, websocket: WebSocket):
         self.websocket_clients.append(websocket)
         if self.last_progress:
@@ -49,6 +52,32 @@ class IndexingManager:
         except Exception as e:
             print(f"Error sending to WebSocket: {e}")
             self.remove_websocket(websocket)
+
+    def _save_progress_state(self):
+        """Persist progress state to MinIO."""
+        try:
+            if self.last_progress:
+                bucket = bucket_manager.get_current_bucket()
+                if bucket:
+                    progress_data = {
+                        "bucket_name": bucket.name,
+                        "last_progress": self.last_progress
+                    }
+                    minio_service.put_json(bucket.name, "progress_state.json", progress_data)
+        except Exception as e:
+            print(f"Failed to save progress state: {e}")
+
+    def _load_progress_state(self):
+        """Load persisted progress state from MinIO."""
+        try:
+            bucket = bucket_manager.get_current_bucket()
+            if bucket:
+                progress_data = minio_service.get_json(bucket.name, "progress_state.json")
+                if progress_data and progress_data.get("bucket_name") == bucket.name:
+                    self.last_progress = progress_data.get("last_progress")
+                    print(f"Loaded persisted progress for {bucket.name}")
+        except Exception as e:
+            print(f"Failed to load progress state: {e}")
 
     def on_progress(self, **kwargs):
         event_type = kwargs.get("type", "progress")
@@ -72,6 +101,9 @@ class IndexingManager:
         }
         self.last_progress = event_data
         self.progress_queue.put(event_data)
+
+        # Persist progress state
+        self._save_progress_state()
 
     def on_error(self, **kwargs):
         error_data = {
