@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useIndexing } from '../context/IndexingContext';
-import { bucketAPI } from '../services/api';
+import { bucketAPI, statsAPI } from '../services/api';
 
 export function SettingsPage() {
   const { state, refreshBuckets } = useIndexing();
   const { currentBucket } = state;
 
-
+  // Available Ollama Models
+  const [availableModels, setAvailableModels] = useState([]);
 
   // Space Settings State
   const [chunkSize, setChunkSize] = useState(1000);
@@ -16,6 +17,20 @@ export function SettingsPage() {
   const [isSavingSpace, setIsSavingSpace] = useState(false);
 
 
+
+  // Load available Ollama models on mount
+  useEffect(() => {
+    loadAvailableModels();
+  }, []);
+
+  const loadAvailableModels = async () => {
+    try {
+      const res = await statsAPI.getOllamaModels();
+      setAvailableModels(res.data.models || []);
+    } catch (err) {
+      console.error("Failed to load available models", err);
+    }
+  };
 
   // Update form when current bucket changes
   useEffect(() => {
@@ -68,7 +83,14 @@ export function SettingsPage() {
         ) : (
           <div className="space-settings-form">
             <div className="form-group" style={{ marginBottom: '1.2rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>LLM Model</label>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+                LLM Model
+                {availableModels.length > 0 && (
+                  <span style={{ fontSize: '0.75rem', color: '#10b981', marginLeft: '0.5rem' }}>
+                    ({availableModels.length} available)
+                  </span>
+                )}
+              </label>
               <select
                 value={llmModel}
                 onChange={(e) => setLlmModel(e.target.value)}
@@ -82,17 +104,39 @@ export function SettingsPage() {
                   cursor: 'pointer'
                 }}
               >
-                <option value="llama3.3">llama3.3</option>
-                <option value="llama3.2">llama3.2</option>
-                <option value="llama3.1">llama3.1</option>
-                <option value="llama3">llama3</option>
-                <option value="mistral">mistral</option>
-                <option value="gpt-oss">gpt-oss</option>
-                <option value="deepseek-r1">deepseek-r1</option>
+                {availableModels.length > 0 ? (
+                  availableModels.map((model) => {
+                    // Extract base model name without tag
+                    const baseName = model.name.split(':')[0];
+                    return (
+                      <option key={model.name} value={baseName}>
+                        {model.name}
+                      </option>
+                    );
+                  })
+                ) : (
+                  <>
+                    <option value="llama3.3">llama3.3</option>
+                    <option value="llama3.2">llama3.2</option>
+                    <option value="llama3.1">llama3.1</option>
+                    <option value="llama3">llama3</option>
+                    <option value="mistral">mistral</option>
+                    <option value="gpt-oss">gpt-oss</option>
+                    <option value="deepseek-r1">deepseek-r1</option>
+                  </>
+                )}
               </select>
               <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                The Ollama model to use for chat (must be pulled in Ollama).
+                {availableModels.length > 0
+                  ? 'Select from your installed Ollama models.'
+                  : 'The Ollama model to use for chat. Pull models with: ollama pull <model-name>'
+                }
               </p>
+              {availableModels.length === 0 && (
+                <p style={{ fontSize: '0.8rem', color: '#f59e0b', marginTop: '0.5rem', padding: '0.5rem', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '0.25rem' }}>
+                  ⚠️ Could not detect installed models. Make sure Ollama is running.
+                </p>
+              )}
             </div>
 
             <div className="form-group" style={{ marginBottom: '1.2rem' }}>

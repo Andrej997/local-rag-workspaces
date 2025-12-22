@@ -161,6 +161,29 @@ async def chat(request: ChatRequest):
             def stream_chat_in_thread():
                 """Run the blocking ollama chat in a separate thread"""
                 try:
+                    # Check if model exists
+                    try:
+                        available_models = ollama.list()
+                        model_names = [m['name'] for m in available_models.get('models', [])]
+
+                        # Check if the exact model or any variant exists
+                        model_exists = any(
+                            llm_model in name or name.startswith(llm_model + ':')
+                            for name in model_names
+                        )
+
+                        if not model_exists:
+                            error_msg = (
+                                f"Model '{llm_model}' not found in Ollama. "
+                                f"Available models: {', '.join(model_names[:5])}. "
+                                f"Please pull the model using: ollama pull {llm_model}"
+                            )
+                            chunk_queue.put(('error', error_msg))
+                            return
+                    except Exception as list_err:
+                        print(f"Warning: Could not list Ollama models: {list_err}")
+                        # Continue anyway - let the chat call fail if needed
+
                     stream = ollama.chat(
                         model=llm_model,
                         messages=[
@@ -177,7 +200,14 @@ async def chat(request: ChatRequest):
 
                     chunk_queue.put(('done', None))
                 except Exception as e:
-                    chunk_queue.put(('error', str(e)))
+                    error_msg = str(e)
+                    # Make Ollama errors more user-friendly
+                    if 'not found' in error_msg.lower() or 'model' in error_msg.lower():
+                        error_msg = (
+                            f"Model '{llm_model}' is not available. "
+                            f"Please run: ollama pull {llm_model}"
+                        )
+                    chunk_queue.put(('error', error_msg))
 
             # Start the streaming thread
             thread = Thread(target=stream_chat_in_thread, daemon=True)

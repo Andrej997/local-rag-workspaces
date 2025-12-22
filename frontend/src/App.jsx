@@ -6,6 +6,7 @@ import { ProjectChat } from './components/ProjectChat';
 import { BucketManager } from './components/BucketManager';
 import { SettingsPage } from './components/SettingsPage';
 import { IndexVisualization } from './components/IndexVisualization';
+import { MetadataPage } from './components/MetadataPage';
 import logo from './assets/favico.svg';
 import './App.css';
 
@@ -65,13 +66,19 @@ function App() {
               >
                 <span>🔭</span> Visualize
               </button>
-              <button 
+              <button
                 className={`nav-item ${currentPage === 'search' ? 'active' : ''}`}
                 onClick={() => handleNavClick('search')}
               >
                 <span>💬</span> Chat
               </button>
-              <button 
+              <button
+                className={`nav-item ${currentPage === 'metadata' ? 'active' : ''}`}
+                onClick={() => handleNavClick('metadata')}
+              >
+                <span>🗂️</span> Metadata
+              </button>
+              <button
                 className={`nav-item ${currentPage === 'settings' ? 'active' : ''}`}
                 onClick={() => handleNavClick('settings')}
               >
@@ -88,6 +95,7 @@ function App() {
             {currentPage === 'space' && <SpacePage />}
             {currentPage === 'visualization' && <IndexVisualization />}
             {currentPage === 'search' && <ProjectChat />}
+            {currentPage === 'metadata' && <MetadataPage />}
             {currentPage === 'settings' && <SettingsPage />}
           </div>
         </main>

@@ -227,6 +227,25 @@ export function SpacePage() {
               )}
             </div>
 
+            {/* Indexing Status Message */}
+            {!isRunning && state.progress.percentage === 100 && (
+              <div style={{
+                padding: '0.75rem 1rem',
+                borderRadius: '0.5rem',
+                background: 'rgba(16, 185, 129, 0.1)',
+                border: '1px solid #10b981',
+                color: '#10b981',
+                marginBottom: '1rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                fontWeight: '500'
+              }}>
+                <span style={{ fontSize: '1.2rem' }}>✓</span>
+                <span>All files have been indexed successfully</span>
+              </div>
+            )}
+
             {/* PROGRESS DISPLAY COMPONENT */}
             <div style={{ background: 'var(--bg-primary)', borderRadius: '0.5rem', border: '1px solid var(--border)', minHeight: '100px' }}>
               <ProgressDisplay />

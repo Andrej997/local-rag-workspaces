@@ -59,6 +59,13 @@ export const browseAPI = {
 export const statsAPI = {
   getStats: () => api.get('/stats'),
   getSpaceStats: (bucketName) => api.get(`/stats/space/${bucketName}`),
+  getServiceHealth: () => api.get('/stats/health'),
+  getOllamaModels: () => api.get('/stats/ollama/models'),
+};
+
+export const metadataAPI = {
+  getCollections: () => api.get('/metadata/collections'),
+  getCollectionMetadata: (collectionName) => api.get(`/metadata/collection/${collectionName}`),
 };
 
 export default api;
