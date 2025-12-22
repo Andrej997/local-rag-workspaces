@@ -38,6 +38,12 @@ class SuccessResponse(BaseModel):
 
 # --- Bucket Models ---
 
+class FileMetadata(BaseModel):
+    """Metadata for a file in MinIO."""
+    path: str = Field(..., description="Full path to the file in MinIO")
+    size: int = Field(..., description="File size in bytes")
+    last_modified: datetime = Field(..., description="When the file was last modified/uploaded")
+
 class BucketConfig(BaseModel):
     """Configuration settings for a specific space."""
     chunk_size: int = Field(default=1000, ge=100, le=5000, description="Character count per text chunk")
@@ -49,7 +55,8 @@ class BucketConfig(BaseModel):
 class Bucket(BaseModel):
     """Model representing a project space."""
     name: str = Field(..., description="Unique name of the space")
-    directories: List[str] = Field(default_factory=list, description="List of directories included")
+    directories: List[str] = Field(default_factory=list, description="List of directories included (legacy)")
+    files: List[FileMetadata] = Field(default_factory=list, description="List of files with metadata")
     config: BucketConfig = Field(default_factory=BucketConfig, description="Space configuration")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     last_indexed: Optional[datetime] = None

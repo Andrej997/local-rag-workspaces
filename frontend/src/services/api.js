@@ -22,6 +22,7 @@ export const bucketAPI = {
   removeDirectory: (bucketName, path) => api.delete(`/buckets/${bucketName}/directories`, { data: { paths: [path] } }),
   removeDirectories: (bucketName, paths) => api.delete(`/buckets/${bucketName}/directories`, { data: { paths } }),
   deleteBucket: (name) => api.delete(`/buckets/${name}`),
+  getFile: (bucketName, filePath) => api.get(`/buckets/${bucketName}/files/${filePath}`, { responseType: 'blob' }),
 };
 
 export const uploadAPI = {

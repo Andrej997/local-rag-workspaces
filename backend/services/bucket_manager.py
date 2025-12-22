@@ -5,7 +5,7 @@ import json
 import os
 from typing import List, Optional, Dict, Any
 from datetime import datetime
-from models.schemas import Bucket, BucketConfig
+from models.schemas import Bucket, BucketConfig, FileMetadata
 
 class BucketManager:
     def __init__(self):
@@ -58,11 +58,22 @@ class BucketManager:
                 if "file_count" in config_data:
                     bucket.file_count = config_data["file_count"]
                 
-                # Sync uploads
+                # Sync uploads with metadata
                 # List objects in uploads/
                 uploads = minio_service.list_objects(name, prefix="uploads/")
-                bucket.directories = uploads
-                
+                bucket.directories = uploads  # Keep for backward compatibility
+
+                # Get file metadata
+                file_metadata_list = minio_service.list_objects_with_metadata(name, prefix="uploads/")
+                bucket.files = [
+                    FileMetadata(
+                        path=fm["path"],
+                        size=fm["size"],
+                        last_modified=fm["last_modified"]
+                    )
+                    for fm in file_metadata_list
+                ]
+
                 self.buckets.append(bucket)
 
             # Set current bucket (default to first if available)
@@ -131,20 +142,31 @@ class BucketManager:
         return bucket
 
     def sync_bucket_files(self, bucket_name: str) -> Bucket:
-        """Sync bucket.directories with actual MinIO objects in uploads/."""
+        """Sync bucket.directories and files with actual MinIO objects in uploads/."""
         bucket = next((b for b in self.buckets if b.name == bucket_name), None)
         if not bucket:
             return None
-        
+
         try:
             from services.minio_service import minio_service
             # List only objects in uploads/
             objects = minio_service.list_objects(bucket_name, prefix="uploads/")
-            bucket.directories = objects
+            bucket.directories = objects  # Keep for backward compatibility
+
+            # Get file metadata
+            file_metadata_list = minio_service.list_objects_with_metadata(bucket_name, prefix="uploads/")
+            bucket.files = [
+                FileMetadata(
+                    path=fm["path"],
+                    size=fm["size"],
+                    last_modified=fm["last_modified"]
+                )
+                for fm in file_metadata_list
+            ]
             # We don't need to save this list to config.json as it's dynamic
         except Exception as e:
             print(f"Failed to sync bucket files: {e}")
-        
+
         return bucket
 
     def select_bucket(self, name: str) -> Bucket:
