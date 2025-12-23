@@ -1,52 +1,55 @@
 import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { searchAPI } from '../services/api';
-import { useIndexing } from '../context/IndexingContext';
+import { useConfig } from '../hooks/useConfig';
 import './ProjectChat.css';
 
-export function ProjectChat() {
-  const { state } = useIndexing();
-  const { currentBucket } = state;
+const API_BASE_URL = 'http://localhost:8000/api';
 
-  const [input, setInput] = useState('');
+export function ProjectChat() {
+  const { currentBucket } = useConfig();
+  const [query, setQuery] = useState('');
   const [messages, setMessages] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [sessions, setSessions] = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
+  
   const messagesEndRef = useRef(null);
 
-  // Load sessions and history when bucket changes
+  // Load sessions on mount or bucket change
   useEffect(() => {
     if (currentBucket) {
-      loadSessions();
-      loadHistory();
-    } else {
-      setMessages([]);
-      setSessions([]);
-      setCurrentSessionId(null);
+      fetchSessions();
     }
-  }, [currentBucket?.name]);
+  }, [currentBucket]);
 
-  const loadSessions = async () => {
+  // Load history when session changes
+  useEffect(() => {
+    if (currentBucket && currentSessionId) {
+      loadSessionHistory(currentSessionId);
+    }
+  }, [currentSessionId, currentBucket]);
+
+  const fetchSessions = async () => {
     try {
-      const res = await searchAPI.getSessions(currentBucket.name);
-      setSessions(res.data.sessions || []);
-      // Set current session to the latest if not already set
-      if (res.data.sessions && res.data.sessions.length > 0 && !currentSessionId) {
-        setCurrentSessionId(res.data.sessions[0].id);
+      const res = await fetch(`${API_BASE_URL}/search/sessions/${currentBucket.name}`);
+      const data = await res.json();
+      if (data.sessions && data.sessions.length > 0) {
+        setSessions(data.sessions);
+        // Default to latest session if none selected
+        if (!currentSessionId) setCurrentSessionId(data.sessions[0].id);
       }
     } catch (err) {
       console.error("Failed to load sessions", err);
     }
   };
 
-  const loadHistory = async () => {
+  const loadSessionHistory = async (sessionId) => {
     try {
-      const res = await searchAPI.getHistory(currentBucket.name);
-      if (res.data.history && res.data.history.length > 0) {
-        setMessages(res.data.history);
-      } else {
-        setMessages([{ role: 'system', content: `Ready to chat about **${currentBucket.name}**. Ask me anything!` }]);
+      const res = await fetch(`${API_BASE_URL}/search/sessions/${currentBucket.name}/${sessionId}`);
+      const data = await res.json();
+      if (data.history) {
+        setMessages(data.history);
+        scrollToBottom();
       }
     } catch (err) {
       console.error("Failed to load history", err);
@@ -56,262 +59,196 @@ export function ProjectChat() {
   const handleNewChat = async () => {
     if (!currentBucket) return;
     try {
-      const res = await searchAPI.createNewSession(currentBucket.name);
-      setCurrentSessionId(res.data.session_id);
-      setMessages([{ role: 'system', content: `Ready to chat about **${currentBucket.name}**. Ask me anything!` }]);
-      await loadSessions(); // Refresh session list
+      const res = await fetch(`${API_BASE_URL}/search/sessions/${currentBucket.name}/new`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (data.session_id) {
+        setCurrentSessionId(data.session_id);
+        setMessages([]); // Clear view
+        fetchSessions(); // Refresh list
+      }
     } catch (err) {
       console.error("Failed to create new session", err);
     }
   };
 
-  const handleSessionChange = async (e) => {
-    const sessionId = parseInt(e.target.value);
-    if (!sessionId || !currentBucket) return;
-
-    try {
-      const res = await searchAPI.loadSession(currentBucket.name, sessionId);
-      setCurrentSessionId(sessionId);
-      setMessages(res.data.history || []);
-    } catch (err) {
-      console.error("Failed to load session", err);
-    }
-  };
-
-  const handleClear = async () => {
-    if (!currentBucket) return;
-    if (confirm("Are you sure you want to start a new chat session?")) {
-      const res = await searchAPI.clearHistory(currentBucket.name);
-      setCurrentSessionId(res.data.new_session_id);
-      await loadSessions();
-      loadHistory(); // Reset to system message
-    }
-  };
-
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  const handleSend = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!input.trim() || !currentBucket || loading) return;
+    if (!query.trim() || !currentBucket || isLoading) return;
 
-    const userMessage = { role: 'user', content: input };
+    const userMessage = { role: 'user', content: query, timestamp: new Date().toISOString() };
     setMessages(prev => [...prev, userMessage]);
-    setInput('');
-    setLoading(true);
-
-    // Create a placeholder for the assistant message
-    const assistantMessageIndex = messages.length + 1;
-    setMessages(prev => [...prev, {
-      role: 'assistant',
-      content: '',
-      sources: []
-    }]);
+    setQuery('');
+    setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:8000/api/search/', {
+      const response = await fetch(`${API_BASE_URL}/search/`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           bucket_name: currentBucket.name,
           query: userMessage.content
-        })
+        }),
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      if (!response.ok) throw new Error('Network response was not ok');
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let buffer = '';
+      
+      // Placeholder for AI response
+      const assistantMessage = { 
+        role: 'assistant', 
+        content: '', 
+        sources: [], 
+        timestamp: new Date().toISOString() 
+      };
+      
+      setMessages(prev => [...prev, assistantMessage]);
+
+      let fullContent = '';
 
       while (true) {
-        const { done, value } = await reader.read();
+        const { value, done } = await reader.read();
         if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
 
         for (const line of lines) {
           if (line.startsWith('data: ')) {
-            const data = JSON.parse(line.slice(6));
-
-            if (data.type === 'sources') {
-              setMessages(prev => {
-                const newMessages = [...prev];
-                newMessages[assistantMessageIndex] = {
-                  ...newMessages[assistantMessageIndex],
-                  sources: data.sources
-                };
-                return newMessages;
-              });
-            } else if (data.type === 'content') {
-              setMessages(prev => {
-                const newMessages = [...prev];
-                newMessages[assistantMessageIndex] = {
-                  ...newMessages[assistantMessageIndex],
-                  content: newMessages[assistantMessageIndex].content + data.content
-                };
-                return newMessages;
-              });
-            } else if (data.type === 'error') {
-              setMessages(prev => {
-                const newMessages = [...prev];
-                newMessages[assistantMessageIndex] = {
-                  role: 'error',
-                  content: "Error: " + data.message
-                };
-                return newMessages;
-              });
-              setLoading(false);
-            } else if (data.type === 'done') {
-              setLoading(false);
+            try {
+              const data = JSON.parse(line.slice(6));
+              
+              if (data.type === 'sources') {
+                // Update sources immediately
+                setMessages(prev => {
+                  const newMsgs = [...prev];
+                  newMsgs[newMsgs.length - 1].sources = data.sources;
+                  return newMsgs;
+                });
+              } else if (data.type === 'content') {
+                fullContent += data.content;
+                setMessages(prev => {
+                  const newMsgs = [...prev];
+                  newMsgs[newMsgs.length - 1].content = fullContent;
+                  return newMsgs;
+                });
+              } else if (data.type === 'error') {
+                fullContent += `\n\n**Error:** ${data.message}`;
+                setMessages(prev => {
+                  const newMsgs = [...prev];
+                  newMsgs[newMsgs.length - 1].content = fullContent;
+                  return newMsgs;
+                });
+              }
+            } catch (e) {
+              console.error('Error parsing SSE data', e);
             }
           }
         }
       }
-    } catch (err) {
-      console.error(err);
-      setMessages(prev => {
-        const newMessages = [...prev];
-        newMessages[assistantMessageIndex] = {
-          role: 'error',
-          content: "Error: " + (err.message || "Failed to search codebase.")
-        };
-        return newMessages;
-      });
-      setLoading(false);
+    } catch (error) {
+      setMessages(prev => [
+        ...prev,
+        { role: 'assistant', content: `Error: ${error.message}` }
+      ]);
+    } finally {
+      setIsLoading(false);
+      scrollToBottom();
     }
   };
 
-  if (!currentBucket) {
+  const getSourceBadge = (source) => {
+    if (source.type === 'bm25') return <span className="badge badge-bm25">Keyword</span>;
+    if (source.type === 'vector') return <span className="badge badge-vector">Vector</span>;
+    return <span className="badge badge-default">Context</span>;
+  };
+
+  const renderSources = (sources) => {
+    if (!sources || sources.length === 0) return null;
     return (
-      <div className="chat-empty-state">
-        <div className="empty-icon">📂</div>
-        <h2>No Space Selected</h2>
-        <p>Please select a space in the sidebar to start chatting.</p>
+      <div className="sources-container">
+        <div className="sources-title">📚 Used {sources.length} sources:</div>
+        <div className="sources-list">
+          {sources.map((source, idx) => (
+            <div key={idx} className="source-item" title={source.content}>
+              <div className="source-header">
+                {getSourceBadge(source)}
+                <span className="source-filename">{source.filename}</span>
+                <span className="source-score">
+                  {source.rerank_score ? `Rerank: ${source.rerank_score.toFixed(2)}` : `Sim: ${source.score.toFixed(2)}`}
+                </span>
+              </div>
+              <div className="source-preview">{source.content.substring(0, 150)}...</div>
+            </div>
+          ))}
+        </div>
       </div>
     );
-  }
+  };
+
+  if (!currentBucket) return <div className="no-bucket">Please select a space first</div>;
 
   return (
     <div className="chat-container">
-      <div className="chat-header">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
-          <h1>Chat with {currentBucket.name}</h1>
-
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            {sessions.length > 0 && (
-              <select
-                value={currentSessionId || ''}
-                onChange={handleSessionChange}
-                style={{
-                  fontSize: '0.85rem',
-                  padding: '4px 8px',
-                  background: 'white',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '4px',
-                  cursor: 'pointer'
-                }}
-              >
-                {sessions.map(session => (
-                  <option key={session.id} value={session.id}>
-                    {session.name}
-                  </option>
-                ))}
-              </select>
-            )}
-
-            <button
-              onClick={handleNewChat}
-              style={{
-                fontSize: '0.8rem',
-                padding: '4px 12px',
-                background: '#2563eb',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer'
-              }}
+      <div className="chat-sidebar">
+        <div className="chat-sidebar-header">
+          <h3>Chats</h3>
+          <button className="new-chat-btn" onClick={handleNewChat}>+</button>
+        </div>
+        <div className="session-list">
+          {sessions.map(session => (
+            <div 
+              key={session.id} 
+              className={`session-item ${currentSessionId === session.id ? 'active' : ''}`}
+              onClick={() => setCurrentSessionId(session.id)}
             >
-              New Chat
-            </button>
-
-            <button
-              onClick={handleClear}
-              style={{
-                fontSize: '0.8rem',
-                padding: '4px 8px',
-                background: 'transparent',
-                color: '#ef4444',
-                border: '1px solid #ef4444',
-                borderRadius: '4px',
-                cursor: 'pointer'
-              }}
-            >
-              Clear
-            </button>
-          </div>
+              💬 Session {session.id}
+            </div>
+          ))}
         </div>
       </div>
 
-      <div className="messages-area">
-        {messages.map((msg, index) => (
-          <div key={index} className={`message-row ${msg.role}`}>
-            <div className="message-bubble">
-              {msg.role === 'error' ? (
-                <div className="error-text">{msg.content}</div>
-              ) : (
-                <ReactMarkdown>{msg.content}</ReactMarkdown>
-              )}
-
-              {msg.sources && msg.sources.length > 0 && (
-                <div className="message-sources">
-                  <strong>References:</strong>
-                  <ul>
-                    {msg.sources.slice(0, 3).map((src, idx) => (
-                      <li key={idx}>
-                        📄 {src.filename} <span className="score">({(src.score).toFixed(2)})</span>
-                      </li>
-                    ))}
-                  </ul>
+      <div className="chat-main">
+        <div className="messages-area">
+          {messages.length === 0 ? (
+            <div className="empty-state">
+              <h2>Ask about your code</h2>
+              <p>Hybrid Search (Keyword + Vector) is active.</p>
+            </div>
+          ) : (
+            messages.map((msg, index) => (
+              <div key={index} className={`message ${msg.role}`}>
+                <div className="message-content">
+                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  {msg.role === 'assistant' && renderSources(msg.sources)}
                 </div>
-              )}
-            </div>
-          </div>
-        ))}
-        {loading && (
-          <div className="message-row assistant">
-            <div className="message-bubble loading-bubble">
-              <span className="dot">.</span><span className="dot">.</span><span className="dot">.</span>
-            </div>
-          </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
+                <div className="message-meta">{new Date(msg.timestamp).toLocaleTimeString()}</div>
+              </div>
+            ))
+          )}
+          <div ref={messagesEndRef} />
+        </div>
 
-      <form onSubmit={handleSend} className="chat-input-area">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask a question about your space..."
-          disabled={loading}
-          autoFocus
-        />
-        <button type="submit" disabled={loading || !input.trim()}>
-          {loading ? '...' : 'Send'}
-        </button>
-      </form>
+        <form onSubmit={handleSubmit} className="input-area">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Ask a question about your codebase..."
+            disabled={isLoading}
+          />
+          <button type="submit" disabled={isLoading}>
+            {isLoading ? '...' : 'Send'}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

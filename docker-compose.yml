@@ -1,105 +1,101 @@
+version: '3.8'
+
 services:
   etcd:
-    container_name: ${ETCD_CONTAINER_NAME:-local-rag-metadata-store}
-    image: quay.io/coreos/etcd:${ETCD_VERSION:-v3.5.5}
+    image: quay.io/coreos/etcd:v3.5.5
     environment:
-      - ETCD_AUTO_COMPACTION_MODE=${ETCD_AUTO_COMPACTION_MODE:-revision}
-      - ETCD_AUTO_COMPACTION_RETENTION=${ETCD_AUTO_COMPACTION_RETENTION:-1000}
-      - ETCD_QUOTA_BACKEND_BYTES=${ETCD_QUOTA_BACKEND_BYTES:-4294967296}
-      - ETCD_SNAPSHOT_COUNT=${ETCD_SNAPSHOT_COUNT:-50000}
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
     volumes:
-      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/etcd:/etcd
-    command: etcd -advertise-client-urls=http://127.0.0.1:${ETCD_CLIENT_PORT:-2379} -listen-client-urls http://0.0.0.0:${ETCD_CLIENT_PORT:-2379} --data-dir /etcd
-    healthcheck:
-      test: ["CMD", "etcdctl", "endpoint", "health"]
-      interval: ${ETCD_HEALTHCHECK_INTERVAL:-30s}
-      timeout: ${ETCD_HEALTHCHECK_TIMEOUT:-20s}
-      retries: ${ETCD_HEALTHCHECK_RETRIES:-3}
+      - etcd_data:/etcd
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls=http://0.0.0.0:2379
 
   minio:
-    container_name: ${MINIO_CONTAINER_NAME:-local-rag-object-storage}
-    image: minio/minio:${MINIO_VERSION:-RELEASE.2023-03-20T20-16-18Z}
+    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    container_name: local-rag-minio
     environment:
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
-    ports:
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
-      - "${MINIO_API_PORT:-9000}:9000"
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
     volumes:
-      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/minio:/minio_data
-    command: minio server /minio_data --console-address ":9001"
+      - minio_data:/data
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    command: server /data --console-address ":9001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: ${MINIO_HEALTHCHECK_INTERVAL:-30s}
-      timeout: ${MINIO_HEALTHCHECK_TIMEOUT:-20s}
-      retries: ${MINIO_HEALTHCHECK_RETRIES:-3}
+      interval: 30s
+      timeout: 20s
+      retries: 3
 
-  standalone:
-    container_name: ${MILVUS_CONTAINER_NAME:-local-rag-vector-db}
-    image: milvusdb/milvus:${MILVUS_VERSION:-v2.3.5}
+  milvus:
+    image: milvusdb/milvus:v2.3.4
+    container_name: local-rag-milvus
     command: ["milvus", "run", "standalone"]
-    security_opt:
-    - seccomp:unconfined
     environment:
-      ETCD_ENDPOINTS: ${ETCD_ENDPOINTS:-etcd:2379}
-      MINIO_ADDRESS: ${MINIO_ADDRESS:-minio:9000}
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+      MINIO_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_ACCESS_KEY: ${MINIO_SECRET_KEY:-minioadmin}
     volumes:
-      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/milvus:/var/lib/milvus
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
-      interval: ${MILVUS_HEALTHCHECK_INTERVAL:-30s}
-      start_period: ${MILVUS_HEALTHCHECK_START_PERIOD:-90s}
-      timeout: ${MILVUS_HEALTHCHECK_TIMEOUT:-20s}
-      retries: ${MILVUS_HEALTHCHECK_RETRIES:-3}
+      - milvus_data:/var/lib/milvus
     ports:
       - "${MILVUS_PORT:-19530}:19530"
-      - "${MILVUS_METRICS_PORT:-9091}:9091"
     depends_on:
-      - "etcd"
-      - "minio"
+      - etcd
+      - minio
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      start_period: 90s
+      timeout: 20s
+      retries: 3
 
   backend:
-    container_name: ${BACKEND_CONTAINER_NAME:-local-rag-backend}
-    build:
+    build: 
       context: ./backend
       dockerfile: Dockerfile
+    container_name: local-rag-backend
     environment:
-      - PYTHONUNBUFFERED=${PYTHONUNBUFFERED:-1}
-      - MILVUS_HOST=${MILVUS_HOST:-standalone}
-      - MILVUS_PORT=${MILVUS_PORT:-19530}
+      - MILVUS_HOST=milvus
+      - MILVUS_PORT=19530
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
       - OLLAMA_HOST=${OLLAMA_HOST:-http://host.docker.internal:11434}
+      - TRANSFORMERS_CACHE=/root/.cache/huggingface
+    volumes:
+      - ./backend:/app
+      - huggingface_cache:/root/.cache/huggingface
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     depends_on:
-      standalone:
+      milvus:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
-      interval: ${BACKEND_HEALTHCHECK_INTERVAL:-30s}
-      timeout: ${BACKEND_HEALTHCHECK_TIMEOUT:-10s}
-      retries: ${BACKEND_HEALTHCHECK_RETRIES:-3}
-      start_period: ${BACKEND_HEALTHCHECK_START_PERIOD:-40s}
-    restart: unless-stopped
+      minio:
+        condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
   frontend:
-    container_name: ${FRONTEND_CONTAINER_NAME:-local-rag-frontend}
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    container_name: local-rag-frontend
+    environment:
+      - VITE_API_BASE_URL=http://localhost:${BACKEND_PORT:-8000}/api
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
     ports:
       - "${FRONTEND_PORT:-80}:80"
     depends_on:
       - backend
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
-      interval: ${FRONTEND_HEALTHCHECK_INTERVAL:-30s}
-      timeout: ${FRONTEND_HEALTHCHECK_TIMEOUT:-3s}
-      retries: ${FRONTEND_HEALTHCHECK_RETRIES:-3}
-      start_period: ${FRONTEND_HEALTHCHECK_START_PERIOD:-10s}
-    restart: unless-stopped
 
-networks:
-  default:
-    name: ${NETWORK_NAME:-local-rag-network}
+volumes:
+  etcd_data:
+  minio_data:
+  milvus_data:
+  huggingface_cache:

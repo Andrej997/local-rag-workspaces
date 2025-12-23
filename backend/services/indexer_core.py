@@ -12,7 +12,8 @@ from pptx import Presentation
 from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType, utility
 from typing import Callable, Optional, List
 from services.file_types import is_supported_file
-
+# Import BM25 Service
+from services.bm25_service import BM25Service
 
 class IndexerWithCallbacks:
     """
@@ -30,6 +31,7 @@ class IndexerWithCallbacks:
         error_callback: Optional[Callable] = None
     ):
         self.target_paths = target_paths
+        self.raw_bucket_name = collection_name # Store raw name for MinIO
         self.collection_name = re.sub(r'[^a-zA-Z0-9_]', '_', collection_name)
         self.chunk_size = chunk_size
         self.embedding_model = embedding_model
@@ -300,11 +302,13 @@ class IndexerWithCallbacks:
                 self.emit_progress(type='complete', files_total=0, percentage=100.0, message='No valid files found')
                 return
 
+            # Extract Content and Embeddings
             my_data = self.process_files(total_files)
 
             if self.should_stop: return
 
             if my_data[0]:
+                # 1. Insert into Milvus (Vector Search)
                 self.emit_progress(type='inserting_data', message=f'Inserting {len(my_data[0])} vectors...')
                 self.collection.insert(my_data)
 
@@ -312,6 +316,17 @@ class IndexerWithCallbacks:
                 index_params = {"metric_type": "L2", "index_type": "IVF_FLAT", "params": {"nlist": 128}}
                 self.collection.create_index("embedding", index_params)
                 self.collection.load()
+
+                # 2. Build BM25 Index (Keyword Search)
+                self.emit_progress(type='indexing_bm25', message='Building keyword index (BM25)...')
+                try:
+                    bm25_service = BM25Service()
+                    # my_data[0] is contents, my_data[1] is filenames
+                    bm25_service.build_index(contents=my_data[0], filenames=my_data[1])
+                    bm25_service.save_to_minio(self.raw_bucket_name)
+                    self.emit_progress(type='bm25_saved', message='Keyword index saved successfully')
+                except Exception as e:
+                    self.emit_error(type='error', error='BM25 Error', message=f'Failed to build/save BM25 index: {e}')
 
                 self.emit_progress(type='complete', files_total=total_files, files_processed=total_files, chunks_total=len(my_data[0]), embedding_dim=self.embedding_dim, percentage=100.0, message='Indexing completed successfully!')
             else:
