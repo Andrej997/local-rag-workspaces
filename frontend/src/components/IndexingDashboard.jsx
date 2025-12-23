@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { statsAPI } from '../services/api';
 import { useIndexing } from '../context/IndexingContext';
+import { ServiceHealthCard } from './ServiceHealthCard';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell
@@ -119,51 +120,10 @@ export function IndexingDashboard() {
 
         {/* Service Health Section */}
         {serviceHealth && (
-          <div className="card" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              Service Status
-              <span style={{
-                fontSize: '0.75rem',
-                padding: '0.25rem 0.75rem',
-                borderRadius: '1rem',
-                background: serviceHealth.status === 'healthy' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)',
-                color: serviceHealth.status === 'healthy' ? '#10b981' : '#f59e0b',
-                fontWeight: '600'
-              }}>
-                {serviceHealth.status === 'healthy' ? 'All Systems Operational' : 'Degraded'}
-              </span>
-            </h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }}>
-              {serviceHealth.services.map((service, index) => (
-                <div
-                  key={index}
-                  style={{
-                    padding: '0.75rem 1rem',
-                    borderRadius: '0.5rem',
-                    background: service.status === 'healthy' ? 'rgba(16, 185, 129, 0.05)' : service.status === 'unhealthy' ? 'rgba(239, 68, 68, 0.05)' : 'rgba(148, 163, 184, 0.05)',
-                    border: `1px solid ${service.status === 'healthy' ? '#10b981' : service.status === 'unhealthy' ? '#ef4444' : '#94a3b8'}`,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '0.25rem'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', fontWeight: '600' }}>
-                    <span style={{
-                      width: '8px',
-                      height: '8px',
-                      borderRadius: '50%',
-                      background: service.status === 'healthy' ? '#10b981' : service.status === 'unhealthy' ? '#ef4444' : '#94a3b8',
-                      boxShadow: service.status === 'healthy' ? '0 0 6px #10b981' : 'none'
-                    }}></span>
-                    {service.name}
-                  </div>
-                  <div style={{ fontSize: '0.75rem', color: '#6b7280', marginLeft: '1rem' }}>
-                    {service.message}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <ServiceHealthCard
+            services={serviceHealth.services}
+            overallStatus={serviceHealth.status}
+          />
         )}
 
         {/* Charts */}

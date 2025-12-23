@@ -8,6 +8,10 @@ import asyncio
 # Import routers
 from routes import config, indexing, browse, buckets, search, stats, upload, visualization, metadata, scraping
 from services.indexing_manager import get_indexing_manager
+from middleware import register_exception_handlers
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 app = FastAPI(
     title="Indexer Management API",
@@ -24,6 +28,9 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
+# Register centralized exception handlers
+register_exception_handlers(app)
+
 app.include_router(browse.router, prefix="/api", tags=["Browse"])
 app.include_router(config.router, prefix="/api", tags=["Configuration"])
 app.include_router(buckets.router, prefix="/api/buckets", tags=["Spaces"])
@@ -39,7 +46,7 @@ app.include_router(scraping.router, prefix="/api/scraping", tags=["Web Scraping"
 async def startup_event():
     manager = get_indexing_manager()
     asyncio.create_task(manager.broadcast_progress())
-    print("Indexer Management API started successfully")
+    logger.info("Indexer Management API started successfully")
 
 @app.get("/")
 async def root():

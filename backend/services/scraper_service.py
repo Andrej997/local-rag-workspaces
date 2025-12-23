@@ -1,12 +1,13 @@
 import re
-import logging
 from datetime import datetime
 from urllib.parse import urlparse
 from typing import Optional, Tuple
 
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
+from utils.logger import get_logger
+from utils.validators import validate_url
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ScraperService:
@@ -15,67 +16,6 @@ class ScraperService:
     def __init__(self):
         self.timeout = 60000  # 60 seconds
 
-    def validate_url(self, url: str) -> Tuple[bool, Optional[str]]:
-        """
-        Validate URL format and check for security issues.
-
-        Args:
-            url: The URL to validate
-
-        Returns:
-            Tuple of (is_valid, error_message)
-        """
-        # Check if URL starts with http:// or https://
-        if not re.match(r'^https?://', url, re.IGNORECASE):
-            return False, "URL must start with http:// or https://"
-
-        try:
-            parsed = urlparse(url)
-
-            # Check if hostname exists
-            if not parsed.hostname:
-                return False, "Invalid URL format"
-
-            # Block localhost and loopback addresses (SSRF prevention)
-            blocked_hosts = [
-                'localhost',
-                '127.0.0.1',
-                '0.0.0.0',
-                '::1',
-                '::',
-                '0:0:0:0:0:0:0:1'
-            ]
-
-            hostname_lower = parsed.hostname.lower()
-            if hostname_lower in blocked_hosts:
-                return False, "Cannot scrape localhost or loopback addresses"
-
-            # Block private IP ranges (basic check)
-            if hostname_lower.startswith('10.') or \
-               hostname_lower.startswith('192.168.') or \
-               hostname_lower.startswith('172.16.') or \
-               hostname_lower.startswith('172.17.') or \
-               hostname_lower.startswith('172.18.') or \
-               hostname_lower.startswith('172.19.') or \
-               hostname_lower.startswith('172.20.') or \
-               hostname_lower.startswith('172.21.') or \
-               hostname_lower.startswith('172.22.') or \
-               hostname_lower.startswith('172.23.') or \
-               hostname_lower.startswith('172.24.') or \
-               hostname_lower.startswith('172.25.') or \
-               hostname_lower.startswith('172.26.') or \
-               hostname_lower.startswith('172.27.') or \
-               hostname_lower.startswith('172.28.') or \
-               hostname_lower.startswith('172.29.') or \
-               hostname_lower.startswith('172.30.') or \
-               hostname_lower.startswith('172.31.'):
-                return False, "Cannot scrape private IP addresses"
-
-            return True, None
-
-        except Exception as e:
-            logger.error(f"URL validation error: {str(e)}")
-            return False, f"Invalid URL: {str(e)}"
 
     async def scrape_url(self, url: str) -> bytes:
         """
@@ -92,8 +32,8 @@ class ScraperService:
             TimeoutError: If page load times out
             Exception: For other scraping errors
         """
-        # Validate URL
-        is_valid, error_msg = self.validate_url(url)
+        # Validate URL using centralized validator (improved SSRF protection)
+        is_valid, error_msg = validate_url(url, allow_private=False)
         if not is_valid:
             raise ValueError(error_msg)
 
@@ -102,14 +42,15 @@ class ScraperService:
         try:
             async with async_playwright() as p:
                 # Launch browser with stealth options
+                # Note: --no-sandbox is required in Docker but reduces security
                 browser = await p.chromium.launch(
                     headless=True,
                     args=[
-                        '--no-sandbox',
-                        '--disable-setuid-sandbox',
+                        '--no-sandbox',  # Required for Docker
+                        '--disable-setuid-sandbox',  # Required for Docker
                         '--disable-blink-features=AutomationControlled',
                         '--disable-dev-shm-usage',
-                        '--disable-web-security'
+                        # Removed '--disable-web-security' - security risk
                     ]
                 )
 

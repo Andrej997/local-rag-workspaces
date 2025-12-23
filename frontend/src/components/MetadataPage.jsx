@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { metadataAPI } from '../services/api';
 import { useIndexing } from '../context/IndexingContext';
+import { useNotification } from '../context/NotificationContext';
 
 export function MetadataPage() {
   const { state } = useIndexing();
+  const { notify } = useNotification();
   const { currentBucket } = state;
 
   const [collections, setCollections] = useState([]);
@@ -47,7 +49,7 @@ export function MetadataPage() {
       }
     } catch (err) {
       console.error("Failed to load collections", err);
-      alert("Failed to load collections: " + (err.response?.data?.detail || err.message));
+      notify.error("Failed to load collections: " + (err.response?.data?.detail || err.message));
     } finally {
       setLoading(false);
     }
@@ -61,7 +63,7 @@ export function MetadataPage() {
       setCollectionDetails(res.data);
     } catch (err) {
       console.error("Failed to load collection details", err);
-      alert("Failed to load collection details: " + (err.response?.data?.detail || err.message));
+      notify.error("Failed to load collection details: " + (err.response?.data?.detail || err.message));
       setCollectionDetails(null);
     } finally {
       setDetailsLoading(false);
