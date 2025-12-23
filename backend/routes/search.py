@@ -2,8 +2,6 @@
 API routes for RAG Chat with History Persistence.
 Implements Advanced RAG: Hybrid Search (Vector + BM25) + Reranking + Query Expansion.
 """
-import os
-import re
 import json
 import asyncio
 from queue import Queue
@@ -12,15 +10,20 @@ import ollama
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import List, Optional
-from pymilvus import connections, Collection, utility
+from typing import List
 from services.chat_manager import chat_manager
 from services.bucket_manager import bucket_manager
-# Import Advanced RAG Services
-from services.bm25_service import BM25Service
-from services.reranker_service import rerank_documents
+from services.milvus_service import get_milvus_service
+from services.rag_service import get_rag_service
+from utils.logger import get_logger
+from utils.sanitizers import sanitize_collection_name
 
+logger = get_logger(__name__)
 router = APIRouter()
+
+# Get service instances
+milvus_service = get_milvus_service()
+rag_service = get_rag_service()
 
 class ChatRequest(BaseModel):
     bucket_name: str
@@ -33,62 +36,8 @@ class ChatResponse(BaseModel):
 class HistoryResponse(BaseModel):
     history: List[dict]
 
-def get_collection_name(bucket_name: str) -> str:
-    return re.sub(r'[^a-zA-Z0-9_]', '_', bucket_name)
 
-def connect_milvus():
-    try:
-        milvus_host = os.getenv("MILVUS_HOST", "localhost")
-        milvus_port = os.getenv("MILVUS_PORT", "19530")
-        connections.connect("default", host=milvus_host, port=milvus_port)
-    except Exception as e:
-        print(f"Milvus connection error: {e}")
-        raise HTTPException(status_code=500, detail="Could not connect to vector database")
-
-# --- Advanced RAG Helpers ---
-
-def expand_query(original_query: str, model_name: str) -> List[str]:
-    """Use LLM to generate variations of the user query."""
-    try:
-        prompt = (
-            f"Generate 3 different search queries to answer this user question. "
-            f"Focus on technical terms and synonyms. "
-            f"Output only the queries, one per line. Do not number them.\n\n"
-            f"User Question: {original_query}"
-        )
-        response = ollama.chat(model=model_name, messages=[{'role': 'user', 'content': prompt}])
-        content = response['message']['content']
-        # Parse lines
-        queries = [line.strip().lstrip('- ') for line in content.split('\n') if line.strip()]
-        return list(set([original_query] + queries))
-    except Exception as e:
-        print(f"Query expansion failed: {e}")
-        return [original_query]
-
-def reciprocal_rank_fusion(results_list: List[List[dict]], k=60):
-    """
-    Combines results from multiple sources (Vector, BM25).
-    Each item in results_list is a list of dicts with 'content' and 'filename'.
-    """
-    fused_scores = {}
-    
-    for results in results_list:
-        for rank, doc in enumerate(results):
-            # Create a unique key (filename + content hash snippet)
-            # This handles duplicate chunks found by different methods
-            key = f"{doc['filename']}_{hash(doc['content'][:50])}"
-            
-            if key not in fused_scores:
-                fused_scores[key] = {'doc': doc, 'score': 0.0}
-            
-            # RRF Formula: 1 / (rank + k)
-            fused_scores[key]['score'] += 1 / (rank + k)
-            
-    # Convert back to list sorted by fused score
-    final_results = sorted(fused_scores.values(), key=lambda x: x['score'], reverse=True)
-    return [item['doc'] for item in final_results]
-
-# --- Existing Routes ---
+# --- Session Management Routes ---
 
 @router.get("/history/{bucket_name}", response_model=HistoryResponse)
 async def get_chat_history(bucket_name: str):
@@ -144,75 +93,28 @@ async def chat(request: ChatRequest):
     # 2. Save User Message
     chat_manager.save_message(request.bucket_name, "user", request.query)
 
-    connect_milvus()
-    collection_name = get_collection_name(request.bucket_name)
+    # 3. Get collection name and verify it exists
+    collection_name = sanitize_collection_name(request.bucket_name)
 
-    # Check index existence
-    if not utility.has_collection(collection_name):
+    # Check index existence using MilvusService
+    if not milvus_service.collection_exists(collection_name, sanitize=False):
         error_msg = f"No index found for space '{request.bucket_name}'. Please index some files first."
         chat_manager.save_message(request.bucket_name, "assistant", error_msg)
+        logger.warning(f"No collection found for bucket '{request.bucket_name}'")
         raise HTTPException(status_code=404, detail=error_msg)
 
     # 3. Hybrid Retrieval & Reranking (Runs in Thread Pool)
     async def get_context_advanced():
+        """Retrieve context using advanced RAG service"""
         def blocking_retrieval():
-            all_results = []
-            
-            # A. Vector Search
-            try:
-                embedding_response = ollama.embeddings(model=embedding_model, prompt=request.query)
-                query_vector = embedding_response['embedding']
-
-                collection = Collection(collection_name)
-                collection.load()
-
-                results = collection.search(
-                    data=[query_vector],
-                    anns_field="embedding",
-                    param={"metric_type": "L2", "params": {"nprobe": 10}},
-                    limit=20, # Fetch more for reranking
-                    output_fields=["content", "filename"]
-                )
-                
-                vector_chunks = []
-                for hits in results:
-                    for hit in hits:
-                        vector_chunks.append({
-                            "filename": hit.entity.get("filename"),
-                            "content": hit.entity.get("content"),
-                            "score": hit.score,
-                            "type": "vector"
-                        })
-                all_results.append(vector_chunks)
-            except Exception as e:
-                print(f"Vector search failed: {e}")
-
-            # B. BM25 Keyword Search
-            try:
-                bm25 = BM25Service()
-                if bm25.load_from_minio(request.bucket_name):
-                    keyword_results = bm25.search(request.query, top_k=20)
-                    all_results.append(keyword_results)
-            except Exception as e:
-                print(f"BM25 search failed: {e}")
-
-            # C. Fusion (RRF)
-            candidates = reciprocal_rank_fusion(all_results)
-            
-            # D. Reranking (Cross-Encoder)
-            # Take top 50 candidates and rerank to top 5
-            try:
-                final_chunks = rerank_documents(request.query, candidates[:50], top_k=5)
-            except Exception as e:
-                print(f"Reranking failed, falling back to raw results: {e}")
-                final_chunks = candidates[:5]
-
-            # Format Context
-            context_str = ""
-            for chunk in final_chunks:
-                context_str += f"\n--- File: {chunk['filename']} ---\n{chunk['content']}\n"
-                
-            return final_chunks, context_str
+            return rag_service.retrieve_context(
+                query=request.query,
+                collection_name=collection_name,
+                bucket_name=request.bucket_name,
+                embedding_model=embedding_model,
+                top_k=5,
+                enable_reranking=True
+            )
 
         return await asyncio.to_thread(blocking_retrieval)
 
@@ -258,6 +160,7 @@ async def chat(request: ChatRequest):
                     chunk_queue.put(('done', None))
                 except Exception as e:
                     error_msg = str(e)
+                    logger.error(f"Error in streaming chat: {error_msg}")
                     chunk_queue.put(('error', error_msg))
 
             # Start the streaming thread
@@ -286,7 +189,7 @@ async def chat(request: ChatRequest):
                     break
 
         except Exception as e:
-            print(f"Stream generation failed: {e}")
+            logger.error(f"Stream generation failed: {str(e)}")
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
 
     return StreamingResponse(generate_stream(), media_type="text/event-stream")

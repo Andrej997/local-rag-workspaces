@@ -1,19 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useIndexing } from '../context/IndexingContext';
+import { useNotification } from '../context/NotificationContext';
 import { bucketAPI, statsAPI } from '../services/api';
+import { ConfigForm } from './ConfigForm';
 
 export function SettingsPage() {
   const { state, refreshBuckets } = useIndexing();
+  const { notify } = useNotification();
   const { currentBucket } = state;
 
   // Available Ollama Models
   const [availableModels, setAvailableModels] = useState([]);
-
-  // Space Settings State
-  const [chunkSize, setChunkSize] = useState(1000);
-  const [llmModel, setLlmModel] = useState('llama3.2');
-  const [embeddingModel, setEmbeddingModel] = useState('nomic-embed-text');
-  const [temperature, setTemperature] = useState(0.7);
   const [isSavingSpace, setIsSavingSpace] = useState(false);
 
 
@@ -32,32 +29,20 @@ export function SettingsPage() {
     }
   };
 
-  // Update form when current bucket changes
-  useEffect(() => {
-    if (currentBucket && currentBucket.config) {
-      setChunkSize(currentBucket.config.chunk_size || 1000);
-      setLlmModel(currentBucket.config.llm_model || 'llama3.2');
-      setEmbeddingModel(currentBucket.config.embedding_model || 'nomic-embed-text');
-      setTemperature(currentBucket.config.temperature || 0.7);
-    }
-  }, [currentBucket]);
-
-
-
-  const handleSaveSpace = async () => {
+  const handleSaveSpace = async (config) => {
     if (!currentBucket) return;
     setIsSavingSpace(true);
     try {
       await bucketAPI.updateConfig(currentBucket.name, {
-        chunk_size: parseInt(chunkSize),
-        llm_model: llmModel,
-        embedding_model: embeddingModel,
-        temperature: parseFloat(temperature)
+        chunk_size: config.chunk_size,
+        llm_model: config.llm_model,
+        embedding_model: config.embedding_model,
+        temperature: config.temperature
       });
       await refreshBuckets(); // Refresh context
-      alert(`Settings for "${currentBucket.name}" saved!`);
+      notify.success(`Settings for "${currentBucket.name}" saved!`);
     } catch (err) {
-      alert('Failed to save space settings: ' + err.message);
+      notify.error('Failed to save space settings: ' + err.message);
     } finally {
       setIsSavingSpace(false);
     }
@@ -82,152 +67,66 @@ export function SettingsPage() {
           <p style={{ color: 'var(--text-muted)' }}>Select a space from the sidebar to configure it.</p>
         ) : (
           <div className="space-settings-form">
-            <div className="form-group" style={{ marginBottom: '1.2rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
-                LLM Model
+            {/* Ollama Models Detection Warning */}
+            {availableModels.length === 0 && (
+              <div style={{
+                fontSize: '0.85rem',
+                color: '#f59e0b',
+                marginBottom: '1rem',
+                padding: '0.75rem',
+                background: 'rgba(245, 158, 11, 0.1)',
+                borderRadius: '0.375rem',
+                border: '1px solid rgba(245, 158, 11, 0.3)'
+              }}>
+                ⚠️ Could not detect installed Ollama models. Make sure Ollama is running.
                 {availableModels.length > 0 && (
-                  <span style={{ fontSize: '0.75rem', color: '#10b981', marginLeft: '0.5rem' }}>
-                    ({availableModels.length} available)
+                  <span style={{ marginLeft: '0.5rem', color: '#10b981' }}>
+                    ({availableModels.length} models detected)
                   </span>
                 )}
-              </label>
-              <select
-                value={llmModel}
-                onChange={(e) => setLlmModel(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  fontSize: '1rem',
-                  borderRadius: '0.375rem',
-                  border: '1px solid var(--border)',
-                  background: 'white',
-                  cursor: 'pointer'
-                }}
-              >
-                {availableModels.length > 0 ? (
-                  availableModels.map((model) => {
-                    // Extract base model name without tag
-                    const baseName = model.name.split(':')[0];
-                    return (
-                      <option key={model.name} value={baseName}>
-                        {model.name}
-                      </option>
-                    );
-                  })
-                ) : (
-                  <>
-                    <option value="llama3.3">llama3.3</option>
-                    <option value="llama3.2">llama3.2</option>
-                    <option value="llama3.1">llama3.1</option>
-                    <option value="llama3">llama3</option>
-                    <option value="mistral">mistral</option>
-                    <option value="gpt-oss">gpt-oss</option>
-                    <option value="deepseek-r1">deepseek-r1</option>
-                  </>
-                )}
-              </select>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                {availableModels.length > 0
-                  ? 'Select from your installed Ollama models.'
-                  : 'The Ollama model to use for chat. Pull models with: ollama pull <model-name>'
-                }
-              </p>
-              {availableModels.length === 0 && (
-                <p style={{ fontSize: '0.8rem', color: '#f59e0b', marginTop: '0.5rem', padding: '0.5rem', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '0.25rem' }}>
-                  ⚠️ Could not detect installed models. Make sure Ollama is running.
-                </p>
-              )}
-            </div>
-
-            <div className="form-group" style={{ marginBottom: '1.2rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Embedding Model</label>
-              <select
-                value={embeddingModel}
-                onChange={(e) => setEmbeddingModel(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  fontSize: '1rem',
-                  borderRadius: '0.375rem',
-                  border: '1px solid var(--border)',
-                  background: 'white',
-                  cursor: 'pointer'
-                }}
-              >
-                <option value="nomic-embed-text">nomic-embed-text (768 dim)</option>
-                <option value="mxbai-embed-large">mxbai-embed-large (1024 dim)</option>
-                <option value="all-minilm">all-minilm (384 dim)</option>
-              </select>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                The embedding model for vector search. <strong>Requires re-indexing to apply.</strong>
-              </p>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-              <div className="form-group">
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Temperature ({temperature})</label>
-                <input
-                  type="range"
-                  min="0" max="1" step="0.1"
-                  value={temperature}
-                  onChange={(e) => setTemperature(e.target.value)}
-                  style={{ width: '100%', cursor: 'pointer' }}
-                />
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                  Lower is more precise, higher is more creative.
-                </p>
               </div>
+            )}
 
-              <div className="form-group">
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Chunk Size</label>
-                <input
-                  type="number"
-                  value={chunkSize}
-                  onChange={(e) => setChunkSize(e.target.value)}
-                  min="100" max="5000"
-                  style={{ width: '100%' }}
-                />
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                  Characters per vector chunk. <strong>Requires re-indexing to apply.</strong>
-                </p>
-              </div>
-            </div>
+            <ConfigForm
+              initialValues={{
+                chunk_size: currentBucket.config?.chunk_size || 1000,
+                llm_model: currentBucket.config?.llm_model || 'llama3.2',
+                embedding_model: currentBucket.config?.embedding_model || 'nomic-embed-text',
+                temperature: currentBucket.config?.temperature || 0.7
+              }}
+              onSubmit={handleSaveSpace}
+              submitLabel={isSavingSpace ? 'Saving Changes...' : 'Save Configuration'}
+              showNameField={false}
+              availableModels={availableModels.map(m => m.name)}
+              disabled={isSavingSpace}
+            />
 
-            <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border)', paddingTop: '1.5rem' }}>
+            {/* Destructive Actions Section */}
+            <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border)' }}>
+              <h4 style={{ color: '#ef4444', marginBottom: '0.75rem', fontSize: '0.9rem' }}>Danger Zone</h4>
               <button
                 onClick={async () => {
                   if (confirm(`Are you sure you want to delete space "${currentBucket.name}"? This cannot be undone.`)) {
                     try {
                       await bucketAPI.deleteBucket(currentBucket.name);
-                      alert("Space deleted.");
+                      notify.success("Space deleted successfully");
                       await refreshBuckets();
                     } catch (e) {
-                      alert("Failed to delete space: " + e.message);
+                      notify.error("Failed to delete space: " + e.message);
                     }
                   }
                 }}
                 style={{
-                  background: 'none', color: '#ef4444', border: '1px solid #ef4444',
-                  borderRadius: '0.5rem', padding: '0.75rem 1.5rem', fontWeight: 'bold', cursor: 'pointer'
+                  background: 'none',
+                  color: '#ef4444',
+                  border: '1px solid #ef4444',
+                  borderRadius: '0.5rem',
+                  padding: '0.75rem 1.5rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
                 }}
               >
                 Delete Space
-              </button>
-
-              <button
-                onClick={handleSaveSpace}
-                disabled={isSavingSpace}
-                style={{
-                  background: 'var(--accent)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '0.5rem',
-                  padding: '0.75rem 2rem',
-                  fontWeight: 'bold',
-                  fontSize: '1rem'
-                }}
-              >
-                {isSavingSpace ? 'Saving Changes...' : 'Save Configuration'}
               </button>
             </div>
           </div>

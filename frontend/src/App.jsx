@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { IndexingProvider } from './context/IndexingContext';
+import { NotificationProvider } from './context/NotificationContext';
+import ErrorBoundary from './components/ErrorBoundary';
+import { NotificationContainer } from './components/NotificationContainer';
 import { IndexingDashboard } from './components/IndexingDashboard';
 import { SpacePage } from './components/SpacePage';
 import { ProjectChat } from './components/ProjectChat';
@@ -45,8 +48,11 @@ function App() {
   }, [navigate]);
 
   return (
-    <IndexingProvider>
-      <div className="app-layout">
+    <ErrorBoundary>
+      <NotificationProvider>
+        <IndexingProvider>
+          <NotificationContainer />
+          <div className="app-layout">
         {/* Mobile Header for Navigation */}
         <header className="mobile-header">
           <div className="logo-area">
@@ -131,8 +137,10 @@ function App() {
             </Routes>
           </div>
         </main>
-      </div>
-    </IndexingProvider>
+          </div>
+        </IndexingProvider>
+      </NotificationProvider>
+    </ErrorBoundary>
   );
 }
 

@@ -18,5 +18,7 @@ playwright==1.41.0
 pillow==10.2.0
 reportlab==4.0.9
 rank_bm25==0.2.2
-sentence-transformers==2.2.2
-torch==2.1.0
+sentence-transformers==2.5.1
+torch==2.2.0
+torchvision==0.17.0
+torchaudio==2.2.0
