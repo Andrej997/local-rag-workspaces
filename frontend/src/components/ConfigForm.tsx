@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
+import { ConfigFormProps, ConfigFormValues } from '../types';
 
 /**
  * Reusable Configuration Form Component
@@ -12,12 +13,12 @@ export function ConfigForm({
   showNameField = false,
   availableModels = [],
   disabled = false
-}) {
-  const [name, setName] = useState(initialValues.name || '');
-  const [chunkSize, setChunkSize] = useState(initialValues.chunk_size || 1000);
-  const [llmModel, setLlmModel] = useState(initialValues.llm_model || 'llama3.2');
-  const [embeddingModel, setEmbeddingModel] = useState(initialValues.embedding_model || 'nomic-embed-text');
-  const [temperature, setTemperature] = useState(initialValues.temperature || 0.7);
+}: ConfigFormProps) {
+  const [name, setName] = useState<string>(initialValues.name || '');
+  const [chunkSize, setChunkSize] = useState<number>(initialValues.chunk_size || 1000);
+  const [llmModel, setLlmModel] = useState<string>(initialValues.llm_model || 'llama3.2');
+  const [embeddingModel, setEmbeddingModel] = useState<string>(initialValues.embedding_model || 'nomic-embed-text');
+  const [temperature, setTemperature] = useState<number>(initialValues.temperature || 0.7);
 
   // Update form when initialValues change
   useEffect(() => {
@@ -28,13 +29,13 @@ export function ConfigForm({
     if (initialValues.temperature !== undefined) setTemperature(initialValues.temperature);
   }, [initialValues]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const config = {
-      chunk_size: parseInt(chunkSize),
+    const config: ConfigFormValues = {
+      chunk_size: typeof chunkSize === 'string' ? parseInt(chunkSize) : chunkSize,
       llm_model: llmModel,
       embedding_model: embeddingModel,
-      temperature: parseFloat(temperature)
+      temperature: typeof temperature === 'string' ? parseFloat(temperature) : temperature
     };
 
     if (showNameField) {
@@ -92,7 +93,7 @@ export function ConfigForm({
       <input
         type="number"
         value={chunkSize}
-        onChange={(e) => setChunkSize(e.target.value)}
+        onChange={(e) => setChunkSize(parseInt(e.target.value) || 0)}
         min="100"
         max="5000"
         style={{ width: '100%', marginBottom: '0.75rem' }}
@@ -137,7 +138,7 @@ export function ConfigForm({
       <input
         type="number"
         value={temperature}
-        onChange={(e) => setTemperature(e.target.value)}
+        onChange={(e) => setTemperature(parseFloat(e.target.value) || 0)}
         step="0.1"
         min="0"
         max="2"

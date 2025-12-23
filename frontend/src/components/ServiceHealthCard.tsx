@@ -1,11 +1,13 @@
+import { ServiceHealthCardProps, ServiceHealth } from '../types';
+
 /**
  * Reusable Service Health Card Component
  * Displays service health status with visual indicators
  */
-export function ServiceHealthCard({ services, overallStatus = 'healthy' }) {
+export function ServiceHealthCard({ services, overallStatus = 'healthy' }: ServiceHealthCardProps) {
   if (!services || services.length === 0) return null;
 
-  const getStatusColor = (status) => {
+  const getStatusColor = (status: ServiceHealth['status']): string => {
     switch (status) {
       case 'healthy': return '#10b981';
       case 'unhealthy': return '#ef4444';
@@ -13,7 +15,7 @@ export function ServiceHealthCard({ services, overallStatus = 'healthy' }) {
     }
   };
 
-  const getStatusBackground = (status) => {
+  const getStatusBackground = (status: ServiceHealth['status']): string => {
     switch (status) {
       case 'healthy': return 'rgba(16, 185, 129, 0.05)';
       case 'unhealthy': return 'rgba(239, 68, 68, 0.05)';

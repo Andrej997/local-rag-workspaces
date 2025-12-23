@@ -1,19 +1,20 @@
 import ReactMarkdown from 'react-markdown';
+import { ChatMessageProps, DocumentSource } from '../types';
 
 /**
  * ChatMessage Component
  * Renders a single chat message with optional sources
  */
-export function ChatMessage({ message }) {
+export function ChatMessage({ message }: ChatMessageProps) {
   const { role, content, sources, timestamp } = message;
 
-  const getSourceBadge = (source) => {
+  const getSourceBadge = (source: DocumentSource) => {
     if (source.type === 'bm25') return <span className="badge badge-bm25">Keyword</span>;
     if (source.type === 'vector') return <span className="badge badge-vector">Vector</span>;
     return <span className="badge badge-default">Context</span>;
   };
 
-  const renderSources = (sources) => {
+  const renderSources = (sources?: DocumentSource[]) => {
     if (!sources || sources.length === 0) return null;
     return (
       <div className="sources-container">
