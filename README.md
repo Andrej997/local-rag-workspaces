@@ -185,6 +185,27 @@ Frontend will be available at: **http://localhost:5173**
 2. Navigate to your project folder
 3. Add entire directories at once
 
+### Web Scraping
+
+Capture web pages as PDF documents for indexing in your space:
+
+1. Go to your space and navigate to the **Scraping** tab
+2. Enter a website URL (must start with `http://` or `https://`)
+3. Click **"Load Page"** to preview the website (optional)
+4. Click **"Scrape to PDF"** to start background scraping
+5. You'll be redirected to your space page after the process starts
+
+**Key Features:**
+- **Background Processing**: Scraping happens in the background, so you won't experience timeouts
+- **Non-Blocking**: The frontend returns immediately - no need to wait for scraping to complete
+- **Automatic Error Logging**: Errors are saved to your space's `error/` folder for debugging
+- **Security**: Built-in SSRF protection blocks private IPs and localhost addresses
+
+**File Storage:**
+- **Success**: PDFs saved to `{bucket}/uploads/scraped/scraped_{domain}_{timestamp}.pdf`
+- **Failure**: Error details saved to `{bucket}/error/error_{timestamp}.json`
+- All scraped PDFs are ready for indexing like any other document
+
 ### Indexing
 
 1. Click **"Start Indexing"** button
@@ -280,6 +301,8 @@ Each space has independent configuration:
 
 - **Space config**: MinIO (`{bucket}/config.json`)
 - **Uploaded files**: MinIO (`{bucket}/uploads/`)
+- **Scraped web pages**: MinIO (`{bucket}/uploads/scraped/`)
+- **Scraping errors**: MinIO (`{bucket}/error/`)
 - **Chat history**: SQLite (`backend/chat_history.db`)
 - **Vector embeddings**: Milvus (port 19530)
 - **Milvus data**: Docker volume
@@ -452,6 +475,8 @@ The system uses a `.env` file for configuration. See `.env.example` for all avai
 - Ollama (LLM inference)
 - PyMilvus (vector database)
 - pypdf, python-docx, openpyxl, python-pptx (document parsers)
+- Playwright (web scraping and PDF generation)
+- ReportLab (PDF creation)
 - WebSockets (real-time updates)
 
 ### Infrastructure

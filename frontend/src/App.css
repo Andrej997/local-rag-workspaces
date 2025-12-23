@@ -290,3 +290,29 @@ button:active {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+/* --- Custom Scrollbar Styles --- */
+.file-tree-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.file-tree-scroll::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+  border-radius: 4px;
+}
+
+.file-tree-scroll::-webkit-scrollbar-thumb {
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  border: 2px solid var(--bg-secondary);
+}
+
+.file-tree-scroll::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Firefox */
+.file-tree-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--bg-tertiary) var(--bg-secondary);
+}

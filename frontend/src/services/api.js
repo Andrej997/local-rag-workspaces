@@ -68,4 +68,13 @@ export const metadataAPI = {
   getCollectionMetadata: (collectionName) => api.get(`/metadata/collection/${collectionName}`),
 };
 
+export const scrapingAPI = {
+  scrape: (url, bucketName) => api.post('/scraping/scrape', { url, bucket_name: bucketName }),
+  save: (bucketName, url, pdfData) => api.post('/scraping/save', {
+    bucket_name: bucketName,
+    url,
+    pdf_data: pdfData
+  }),
+};
+
 export default api;
