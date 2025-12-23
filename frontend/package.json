@@ -16,6 +16,7 @@
     "react-dom": "^18.2.0",
     "react-markdown": "^9.0.1",
     "react-plotly.js": "^2.6.0",
+    "react-router-dom": "^7.11.0",
     "recharts": "^2.10.3"
   },
   "devDependencies": {

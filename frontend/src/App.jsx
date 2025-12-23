@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { IndexingProvider } from './context/IndexingContext';
 import { IndexingDashboard } from './components/IndexingDashboard';
 import { SpacePage } from './components/SpacePage';
@@ -7,20 +8,41 @@ import { BucketManager } from './components/BucketManager';
 import { SettingsPage } from './components/SettingsPage';
 import { IndexVisualization } from './components/IndexVisualization';
 import { MetadataPage } from './components/MetadataPage';
+import { WebScrapingPage } from './components/WebScrapingPage';
 import logo from './assets/favico.svg';
 import './App.css';
 
 function App() {
-  const [currentPage, setCurrentPage] = useState('dashboard');
+  const navigate = useNavigate();
+  const location = useLocation();
   const [isSidebarOpen, setSidebarOpen] = useState(false);
 
   const toggleSidebar = () => setSidebarOpen(!isSidebarOpen);
   const closeSidebar = () => setSidebarOpen(false);
 
-  const handleNavClick = (page) => {
-    setCurrentPage(page);
+  const handleNavClick = (path) => {
+    navigate(path);
     closeSidebar();
   };
+
+  // Listen for navigation events
+  useEffect(() => {
+    const handleNavigateToSpace = () => {
+      navigate('/space');
+    };
+
+    const handleNavigateToScraping = () => {
+      navigate('/scraping');
+    };
+
+    window.addEventListener('navigate-to-space', handleNavigateToSpace);
+    window.addEventListener('navigate-to-scraping', handleNavigateToScraping);
+
+    return () => {
+      window.removeEventListener('navigate-to-space', handleNavigateToSpace);
+      window.removeEventListener('navigate-to-scraping', handleNavigateToScraping);
+    };
+  }, [navigate]);
 
   return (
     <IndexingProvider>
@@ -48,39 +70,45 @@ function App() {
             <BucketManager />
 
             <nav className="sidebar-nav">
-              <button 
-                className={`nav-item ${currentPage === 'dashboard' ? 'active' : ''}`}
-                onClick={() => handleNavClick('dashboard')}
+              <button
+                className={`nav-item ${location.pathname === '/' || location.pathname === '/dashboard' ? 'active' : ''}`}
+                onClick={() => handleNavClick('/dashboard')}
               >
                 <span>📊</span> Dashboard
               </button>
-              <button 
-                className={`nav-item ${currentPage === 'space' ? 'active' : ''}`}
-                onClick={() => handleNavClick('space')}
+              <button
+                className={`nav-item ${location.pathname === '/space' ? 'active' : ''}`}
+                onClick={() => handleNavClick('/space')}
               >
                 <span>🚀</span> Space
               </button>
-              <button 
-                className={`nav-item ${currentPage === 'visualization' ? 'active' : ''}`}
-                onClick={() => handleNavClick('visualization')}
+              <button
+                className={`nav-item ${location.pathname === '/scraping' ? 'active' : ''}`}
+                onClick={() => handleNavClick('/scraping')}
+              >
+                <span>🌐</span> Web Scraper
+              </button>
+              <button
+                className={`nav-item ${location.pathname === '/visualization' ? 'active' : ''}`}
+                onClick={() => handleNavClick('/visualization')}
               >
                 <span>🔭</span> Visualize
               </button>
               <button
-                className={`nav-item ${currentPage === 'search' ? 'active' : ''}`}
-                onClick={() => handleNavClick('search')}
+                className={`nav-item ${location.pathname === '/chat' ? 'active' : ''}`}
+                onClick={() => handleNavClick('/chat')}
               >
                 <span>💬</span> Chat
               </button>
               <button
-                className={`nav-item ${currentPage === 'metadata' ? 'active' : ''}`}
-                onClick={() => handleNavClick('metadata')}
+                className={`nav-item ${location.pathname === '/metadata' ? 'active' : ''}`}
+                onClick={() => handleNavClick('/metadata')}
               >
                 <span>🗂️</span> Metadata
               </button>
               <button
-                className={`nav-item ${currentPage === 'settings' ? 'active' : ''}`}
-                onClick={() => handleNavClick('settings')}
+                className={`nav-item ${location.pathname === '/settings' ? 'active' : ''}`}
+                onClick={() => handleNavClick('/settings')}
               >
                 <span>⚙️</span> Settings
               </button>
@@ -91,12 +119,16 @@ function App() {
         {/* Main Content Area */}
         <main className="main-content">
           <div className="content-wrapper">
-            {currentPage === 'dashboard' && <IndexingDashboard />}
-            {currentPage === 'space' && <SpacePage />}
-            {currentPage === 'visualization' && <IndexVisualization />}
-            {currentPage === 'search' && <ProjectChat />}
-            {currentPage === 'metadata' && <MetadataPage />}
-            {currentPage === 'settings' && <SettingsPage />}
+            <Routes>
+              <Route path="/" element={<IndexingDashboard />} />
+              <Route path="/dashboard" element={<IndexingDashboard />} />
+              <Route path="/space" element={<SpacePage />} />
+              <Route path="/scraping" element={<WebScrapingPage />} />
+              <Route path="/visualization" element={<IndexVisualization />} />
+              <Route path="/chat" element={<ProjectChat />} />
+              <Route path="/metadata" element={<MetadataPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+            </Routes>
           </div>
         </main>
       </div>

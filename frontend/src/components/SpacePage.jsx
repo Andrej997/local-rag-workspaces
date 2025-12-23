@@ -98,33 +98,44 @@ export function SpacePage() {
 
         {/* LEFT COLUMN: Sources List & Upload */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          <div className="card" style={{ padding: '1.5rem', flex: 1 }}>
-            <h3 style={{ borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem', marginBottom: '1rem' }}>
+          <div className="card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 200px)' }}>
+            <h3 style={{ borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem', marginBottom: '1rem', flexShrink: 0 }}>
               📂 Indexed Paths / Sources
             </h3>
 
-            {/* File Tree Display */}
-            {(!currentBucket.files || currentBucket.files.length === 0) ? (
-              <p style={{ color: '#64748b', fontStyle: 'italic' }}>No sources added yet. Upload files or folders below.</p>
-            ) : (
-              <FileTree
-                files={currentBucket.files}
-                bucketName={currentBucket.name}
-                onDelete={(paths) => {
-                  if (confirm(`Remove ${paths.length} item(s)?`)) {
-                    bucketAPI.removeDirectories(currentBucket.name, paths)
-                      .then(() => refreshBuckets())
-                      .catch(err => alert("Failed to remove: " + err.message));
-                  }
-                }}
-                onView={(filePath, fileName) => {
-                  setViewingFile({ filePath, fileName });
-                }}
-              />
-            )}
+            {/* File Tree Display with Scroll */}
+            <div
+              className="file-tree-scroll"
+              style={{
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                flex: 1,
+                minHeight: '200px',
+                paddingRight: '0.5rem'
+              }}
+            >
+              {(!currentBucket.files || currentBucket.files.length === 0) ? (
+                <p style={{ color: '#64748b', fontStyle: 'italic' }}>No sources added yet. Upload files or folders below.</p>
+              ) : (
+                <FileTree
+                  files={currentBucket.files}
+                  bucketName={currentBucket.name}
+                  onDelete={(paths) => {
+                    if (confirm(`Remove ${paths.length} item(s)?`)) {
+                      bucketAPI.removeDirectories(currentBucket.name, paths)
+                        .then(() => refreshBuckets())
+                        .catch(err => alert("Failed to remove: " + err.message));
+                    }
+                  }}
+                  onView={(filePath, fileName) => {
+                    setViewingFile({ filePath, fileName });
+                  }}
+                />
+              )}
+            </div>
 
-            {/* Upload Section */}
-            <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border)' }}>
+            {/* Upload Section - Fixed at bottom */}
+            <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border)', flexShrink: 0 }}>
               <h4 style={{ marginBottom: '1rem', fontSize: '1rem', fontWeight: '600' }}>☁️ Upload to MinIO</h4>
 
               <div style={{ display: 'flex', gap: '1rem', flexDirection: 'column' }}>
