@@ -18,6 +18,7 @@ from services.bm25_service import BM25Service
 class IndexerWithCallbacks:
     """
     Codebase indexer with callback-based progress reporting.
+    Supports incremental indexing - only processes new or changed files.
     """
 
     def __init__(
@@ -28,7 +29,8 @@ class IndexerWithCallbacks:
         embedding_model: str = "nomic-embed-text",
         embedding_dim: Optional[int] = None,
         progress_callback: Optional[Callable] = None,
-        error_callback: Optional[Callable] = None
+        error_callback: Optional[Callable] = None,
+        indexed_files_metadata: Optional[dict] = None
     ):
         self.target_paths = target_paths
         self.raw_bucket_name = collection_name # Store raw name for MinIO
@@ -40,6 +42,9 @@ class IndexerWithCallbacks:
         self.error_callback = error_callback or (lambda **kwargs: None)
         self.should_stop = False
         self.collection = None
+        # For incremental indexing: {filename: {size, last_modified}}
+        self.indexed_files_metadata = indexed_files_metadata or {}
+        self.new_indexed_metadata = {}  # Track newly indexed files
 
     def emit_progress(self, **kwargs):
         if self.progress_callback:
@@ -64,6 +69,42 @@ class IndexerWithCallbacks:
                 return False
         return True
 
+    def file_needs_indexing(self, file_path: str) -> bool:
+        """Check if a file is new or has been modified since last indexing."""
+        filename = os.path.basename(file_path)
+
+        # If no previous metadata, file needs indexing
+        if filename not in self.indexed_files_metadata:
+            return True
+
+        # Get current file stats
+        try:
+            stat = os.stat(file_path)
+            current_size = stat.st_size
+            current_mtime = stat.st_mtime
+        except OSError:
+            return True  # If we can't stat, try to index anyway
+
+        # Compare with stored metadata
+        stored = self.indexed_files_metadata[filename]
+        stored_size = stored.get('size', 0)
+        stored_mtime = stored.get('mtime', 0)
+
+        # File changed if size or modification time differs
+        return current_size != stored_size or current_mtime != stored_mtime
+
+    def delete_file_from_collection(self, filename: str):
+        """Delete all chunks for a specific file from the Milvus collection."""
+        if self.collection is None:
+            return
+        try:
+            # Delete by filename expression
+            expr = f'filename == "{filename}"'
+            self.collection.delete(expr)
+            self.emit_progress(type='file_deleted', message=f'Removed old entries for {filename}')
+        except Exception as e:
+            self.emit_error(type='warning', message=f'Failed to delete old entries for {filename}: {str(e)}')
+
     def connect_to_milvus(self) -> bool:
         try:
             milvus_host = os.getenv("MILVUS_HOST", "localhost")
@@ -75,7 +116,12 @@ class IndexerWithCallbacks:
             self.emit_error(type='error', error='Milvus connection failed', message=f'Error connecting to Milvus: {str(e)}')
             return False
 
-    def setup_collection(self):
+    def setup_collection(self, incremental: bool = False):
+        """Setup or reuse Milvus collection.
+
+        Args:
+            incremental: If True, reuse existing collection instead of dropping it.
+        """
         # Auto-detect embedding dimension if not provided
         if not self.embedding_dim:
             try:
@@ -96,20 +142,38 @@ class IndexerWithCallbacks:
         schema = CollectionSchema(fields, f"Codebase search collection for {self.collection_name}")
 
         if utility.has_collection(self.collection_name):
-            self.emit_progress(type='collection_reset', message=f'Deleting existing collection {self.collection_name}')
-            utility.drop_collection(self.collection_name)
+            if incremental:
+                # Reuse existing collection for incremental indexing
+                self.collection = Collection(self.collection_name)
+                self.collection.load()
+                self.emit_progress(type='collection_reused', message=f'Reusing existing collection {self.collection_name} for incremental indexing')
+            else:
+                self.emit_progress(type='collection_reset', message=f'Deleting existing collection {self.collection_name}')
+                utility.drop_collection(self.collection_name)
+                self.collection = Collection(self.collection_name, schema)
+                self.emit_progress(type='collection_created', message=f'Created collection {self.collection_name} (dim={self.embedding_dim})')
+        else:
+            self.collection = Collection(self.collection_name, schema)
+            self.emit_progress(type='collection_created', message=f'Created collection {self.collection_name} (dim={self.embedding_dim})')
 
-        self.collection = Collection(self.collection_name, schema)
-        self.emit_progress(type='collection_created', message=f'Created collection {self.collection_name} (dim={self.embedding_dim})')
+    def count_files(self, incremental: bool = False) -> tuple:
+        """Count total indexable files in all target paths.
 
-    def count_files(self) -> int:
-        """Count total indexable files in all target paths (files or directories)."""
+        Args:
+            incremental: If True, only count files that need indexing (new/changed).
+
+        Returns:
+            Tuple of (files_to_process, total_files, files_needing_indexing_paths)
+        """
         total_files = 0
+        files_to_process = []
 
         for path in self.target_paths:
             if os.path.isfile(path):
                 if is_supported_file(path):
                     total_files += 1
+                    if not incremental or self.file_needs_indexing(path):
+                        files_to_process.append(path)
             elif os.path.isdir(path):
                 for root, dirs, files in os.walk(path):
                     if '.git' in root or 'venv' in root or '__pycache__' in root or 'node_modules' in root:
@@ -117,12 +181,25 @@ class IndexerWithCallbacks:
                     for file in files:
                         if is_supported_file(file):
                             total_files += 1
-        return total_files
+                            full_path = os.path.join(root, file)
+                            if not incremental or self.file_needs_indexing(full_path):
+                                files_to_process.append(full_path)
 
-    def _process_single_file(self, path, files_processed, total_files, data_content, data_filename, data_embeddings):
-        """Helper to process a single file."""
+        return len(files_to_process), total_files, files_to_process
+
+    def _process_single_file(self, path, files_processed, total_files, data_content, data_filename, data_embeddings, is_update: bool = False):
+        """Helper to process a single file.
+
+        Args:
+            is_update: If True, this is an update to an existing file (delete old entries first)
+        """
         try:
             filename = os.path.basename(path)
+
+            # If updating an existing file, delete old entries first
+            if is_update and filename in self.indexed_files_metadata:
+                self.delete_file_from_collection(filename)
+
             self.emit_progress(
                 type='file_started',
                 current_file=filename,
@@ -205,13 +282,29 @@ class IndexerWithCallbacks:
                 data_filename.append(filename)
                 data_embeddings.append(embedding)
 
+            # Save file metadata for incremental indexing
+            try:
+                stat = os.stat(path)
+                self.new_indexed_metadata[filename] = {
+                    'size': stat.st_size,
+                    'mtime': stat.st_mtime
+                }
+            except OSError:
+                pass
+
             return len(chunks)
 
         except Exception as e:
             self.emit_error(type='file_error', current_file=filename, error=str(e), message=f'Error processing {filename}: {str(e)}')
             return 0
 
-    def process_files(self, total_files: int):
+    def process_files_incremental(self, files_to_process: List[str], total_to_process: int):
+        """Process only the files that need indexing (new or changed).
+
+        Args:
+            files_to_process: List of file paths that need indexing
+            total_to_process: Total number of files to process
+        """
         data_content = []
         data_filename = []
         data_embeddings = []
@@ -220,90 +313,80 @@ class IndexerWithCallbacks:
 
         self.emit_progress(
             type='started',
-            files_total=total_files,
+            files_total=total_to_process,
             files_processed=0,
             chunks_total=0,
             percentage=0.0,
-            message=f'Starting indexing (Chunk size: {self.chunk_size})'
+            message=f'Starting incremental indexing (Chunk size: {self.chunk_size}, {total_to_process} files to process)'
         )
 
-        for path in self.target_paths:
-            if self.should_stop: break
+        for file_path in files_to_process:
+            if self.should_stop:
+                break
 
-            # Case 1: Single File
-            if os.path.isfile(path):
-                # Skip unsupported files
-                if not is_supported_file(path):
-                    continue
+            filename = os.path.basename(file_path)
+            # Check if this is an update (file exists in previous metadata)
+            is_update = filename in self.indexed_files_metadata
 
-                chunks_added = self._process_single_file(
-                    path, files_processed, total_files,
-                    data_content, data_filename, data_embeddings
-                )
-                total_chunks += chunks_added
-                files_processed += 1
+            chunks_added = self._process_single_file(
+                file_path, files_processed, total_to_process,
+                data_content, data_filename, data_embeddings,
+                is_update=is_update
+            )
+            total_chunks += chunks_added
+            files_processed += 1
 
-                self.emit_progress(
-                    type='file_completed',
-                    current_file=os.path.basename(path),
-                    files_processed=files_processed,
-                    files_total=total_files,
-                    chunks_total=total_chunks,
-                    percentage=round((files_processed / total_files) * 100, 2) if total_files > 0 else 0,
-                    message=f'Processed {os.path.basename(path)}'
-                )
-
-            # Case 2: Directory
-            elif os.path.isdir(path):
-                for root, dirs, files in os.walk(path):
-                    if self.should_stop: break
-                    if '.git' in root or 'venv' in root or '__pycache__' in root or 'node_modules' in root:
-                        continue
-
-                    for file in files:
-                        if self.should_stop: break
-
-                        # Skip unsupported files
-                        if not is_supported_file(file):
-                            continue
-
-                        full_path = os.path.join(root, file)
-                        chunks_added = self._process_single_file(
-                            full_path, files_processed, total_files,
-                            data_content, data_filename, data_embeddings
-                        )
-                        total_chunks += chunks_added
-                        files_processed += 1
-
-                        self.emit_progress(
-                            type='file_completed',
-                            current_file=file,
-                            files_processed=files_processed,
-                            files_total=total_files,
-                            chunks_total=total_chunks,
-                            percentage=round((files_processed / total_files) * 100, 2) if total_files > 0 else 0,
-                            message=f'Processed {file}'
-                        )
+            action = "Updated" if is_update else "Indexed"
+            self.emit_progress(
+                type='file_completed',
+                current_file=filename,
+                files_processed=files_processed,
+                files_total=total_to_process,
+                chunks_total=total_chunks,
+                percentage=round((files_processed / total_to_process) * 100, 2) if total_to_process > 0 else 0,
+                message=f'{action} {filename}'
+            )
 
         return [data_content, data_filename, data_embeddings]
+
+    def get_final_indexed_metadata(self) -> dict:
+        """Get the combined metadata of all indexed files (existing + newly indexed)."""
+        # Start with existing metadata
+        final_metadata = dict(self.indexed_files_metadata)
+        # Add/update with newly indexed files
+        final_metadata.update(self.new_indexed_metadata)
+        return final_metadata
 
     def run(self):
         try:
             if not self.validate_paths(): return
             if not self.connect_to_milvus(): return
 
-            self.setup_collection()
+            # Determine if we should do incremental indexing
+            has_existing_index = bool(self.indexed_files_metadata)
 
-            self.emit_progress(type='counting_files', message='Counting files...')
-            total_files = self.count_files()
-            self.emit_progress(type='files_counted', files_total=total_files, message=f'Found {total_files} files')
+            self.emit_progress(type='counting_files', message='Analyzing files...')
+            files_to_process_count, total_files, files_to_process = self.count_files(incremental=has_existing_index)
 
-            if total_files == 0:
-                self.emit_progress(type='complete', files_total=0, percentage=100.0, message='No valid files found')
+            if has_existing_index:
+                self.emit_progress(
+                    type='files_counted',
+                    files_total=total_files,
+                    files_to_process=files_to_process_count,
+                    message=f'Found {total_files} files, {files_to_process_count} new/changed'
+                )
+            else:
+                self.emit_progress(type='files_counted', files_total=total_files, message=f'Found {total_files} files')
+
+            if files_to_process_count == 0:
+                self.emit_progress(type='complete', files_total=total_files, percentage=100.0, message='All files are up to date, nothing to index')
                 return
 
-            # Extract Content and Embeddings
-            my_data = self.process_files(total_files)
+            # Setup collection (incremental if we have existing index)
+            self.setup_collection(incremental=has_existing_index)
+
+            # Process files
+            my_data = self.process_files_incremental(files_to_process, files_to_process_count)
 
             if self.should_stop: return
 
@@ -312,23 +395,37 @@ class IndexerWithCallbacks:
                 self.emit_progress(type='inserting_data', message=f'Inserting {len(my_data[0])} vectors...')
                 self.collection.insert(my_data)
 
-                self.emit_progress(type='creating_index', message='Creating vector index...')
-                index_params = {"metric_type": "L2", "index_type": "IVF_FLAT", "params": {"nlist": 128}}
-                self.collection.create_index("embedding", index_params)
+                # Only create index if it's a new collection
+                if not has_existing_index:
+                    self.emit_progress(type='creating_index', message='Creating vector index...')
+                    index_params = {"metric_type": "L2", "index_type": "IVF_FLAT", "params": {"nlist": 128}}
+                    self.collection.create_index("embedding", index_params)
+
                 self.collection.load()
 
-                # 2. Build BM25 Index (Keyword Search)
-                self.emit_progress(type='indexing_bm25', message='Building keyword index (BM25)...')
+                # 2. Build BM25 Index (Keyword Search) - always rebuild for now
+                self.emit_progress(type='indexing_bm25', message='Updating keyword index (BM25)...')
                 try:
                     bm25_service = BM25Service()
-                    # my_data[0] is contents, my_data[1] is filenames
+                    # For incremental, we need to rebuild BM25 with all content
+                    # TODO: In the future, could implement incremental BM25
                     bm25_service.build_index(contents=my_data[0], filenames=my_data[1])
                     bm25_service.save_to_minio(self.raw_bucket_name)
                     self.emit_progress(type='bm25_saved', message='Keyword index saved successfully')
                 except Exception as e:
                     self.emit_error(type='error', error='BM25 Error', message=f'Failed to build/save BM25 index: {e}')
 
-                self.emit_progress(type='complete', files_total=total_files, files_processed=total_files, chunks_total=len(my_data[0]), embedding_dim=self.embedding_dim, percentage=100.0, message='Indexing completed successfully!')
+                mode = "Incremental indexing" if has_existing_index else "Indexing"
+                self.emit_progress(
+                    type='complete',
+                    files_total=total_files,
+                    files_processed=files_to_process_count,
+                    chunks_total=len(my_data[0]),
+                    embedding_dim=self.embedding_dim,
+                    percentage=100.0,
+                    indexed_metadata=self.get_final_indexed_metadata(),
+                    message=f'{mode} completed successfully!'
+                )
             else:
                 self.emit_progress(type='complete', files_total=total_files, embedding_dim=self.embedding_dim, percentage=100.0, message='No content extracted')
 

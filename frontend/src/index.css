@@ -1,30 +1,10 @@
-:root {
-  --primary-color: #2563eb;
-  --primary-hover: #1d4ed8;
-  --secondary-color: #64748b;
-  --background-bg: #f3f4f6;
-  --sidebar-bg: #1e293b;
-  --card-bg: #ffffff;
-  --text-main: #1f2937;
-  --text-muted: #6b7280;
-  --border-color: #e5e7eb;
-  --success-color: #10b981;
-  --error-color: #ef4444;
-  --radius-md: 0.5rem;
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-}
+/*
+  Note: Main color palette is defined in App.css
+  These are legacy variables kept for backward compatibility
+*/
 
 * {
   box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  background-color: var(--background-bg);
-  color: var(--text-main);
-  -webkit-font-smoothing: antialiased;
 }
 
 button {
@@ -32,12 +12,12 @@ button {
   font-family: inherit;
 }
 
-/* Common Utility Classes */
+/* Common Utility Classes - Using App.css variables */
 .card {
-  background: var(--card-bg);
+  background: var(--bg-secondary);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--border-color);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border);
   padding: 1.5rem;
   margin-bottom: 1.5rem;
 }
@@ -55,43 +35,48 @@ button {
 }
 
 .btn-primary {
-  background-color: var(--primary-color);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
   color: white;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
 }
 .btn-primary:hover:not(:disabled) {
-  background-color: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
 }
 .btn-primary:disabled {
-  background-color: var(--secondary-color);
-  opacity: 0.7;
+  background: var(--bg-tertiary);
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
 .btn-secondary {
-  background-color: white;
-  border: 1px solid var(--border-color);
-  color: var(--text-main);
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
 }
 .btn-secondary:hover:not(:disabled) {
-  background-color: #f9fafb;
-  border-color: #d1d5db;
+  background-color: var(--border);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(255, 255, 255, 0.1);
 }
 
 .btn-danger {
-  background-color: var(--error-color);
+  background-color: var(--danger);
   color: white;
 }
 
 .input-field {
   width: 100%;
   padding: 0.6rem;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
   font-size: 0.95rem;
   transition: border-color 0.2s;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 .input-field:focus {
   outline: none;
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
 }

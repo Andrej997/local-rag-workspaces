@@ -565,6 +565,12 @@ Contributions welcome! Please:
 
 See LICENSE file for details.
 
+## Support
+
+If you find this project helpful, consider buying me a coffee!
+
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Support-yellow?style=for-the-badge&logo=buy-me-a-coffee)](https://www.buymeacoffee.com/andrejkalocanj)
+
 ## Acknowledgments
 
 - **Ollama** - Local LLM inference
@@ -576,6 +582,8 @@ See LICENSE file for details.
 ---
 
 **Built for local-first AI applications** 🚀
+
+Developed by **Andrej Kalocanj Mohaci**
 
 For detailed component documentation:
 - [Frontend README](frontend/README.md)

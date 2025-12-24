@@ -51,6 +51,10 @@ class BucketConfig(BaseModel):
     temperature: float = Field(default=0.7, ge=0.0, le=1.0, description="LLM temperature")
     embedding_model: str = Field(default="nomic-embed-text", description="Ollama embedding model to use")
     embedding_dim: int = Field(default=768, description="Embedding vector dimension (auto-detected)")
+    # RAG performance settings
+    top_k: int = Field(default=5, ge=1, le=20, description="Number of documents to retrieve")
+    enable_reranking: bool = Field(default=True, description="Enable cross-encoder reranking (slower but more accurate)")
+    enable_hybrid_search: bool = Field(default=True, description="Enable BM25 keyword search alongside vector search")
 
 class Bucket(BaseModel):
     """Model representing a project space."""

@@ -120,6 +120,10 @@ function App() {
               </button>
             </nav>
           </div>
+
+          <div className="sidebar-footer">
+            <span>Developed by Andrej Kalocanj Mohaci</span>
+          </div>
         </aside>
 
         {/* Main Content Area */}

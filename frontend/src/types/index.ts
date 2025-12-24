@@ -14,6 +14,10 @@ export interface BucketConfig {
   llm_model: string;
   embedding_model: string;
   temperature: number;
+  // RAG performance settings
+  top_k?: number;
+  enable_reranking?: boolean;
+  enable_hybrid_search?: boolean;
 }
 
 export interface FileMetadata {
@@ -128,6 +132,10 @@ export interface ConfigFormValues {
   llm_model: string;
   embedding_model: string;
   temperature: number;
+  // RAG performance settings
+  top_k?: number;
+  enable_reranking?: boolean;
+  enable_hybrid_search?: boolean;
 }
 
 // Component Props types

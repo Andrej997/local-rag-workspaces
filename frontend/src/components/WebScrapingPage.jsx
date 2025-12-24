@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useIndexing } from '../context/IndexingContext';
 import { scrapingAPI } from '../services/api';
+import { GuideModal } from './GuideModal';
 
 export function WebScrapingPage() {
   const { state } = useIndexing();
@@ -90,16 +91,72 @@ export function WebScrapingPage() {
     setSuccessMessage(null);
   };
 
+  const guideContent = {
+    title: "Web Scraping Guide",
+    sections: [
+      {
+        icon: "🌐",
+        title: "How It Works",
+        color: "#3b82f6",
+        description: "Capture web content and add it to your space:",
+        steps: [
+          { label: "Enter URL", text: "Provide the full URL starting with http:// or https://" },
+          { label: "Load Preview", text: "Optional: Preview the page in the browser before scraping" },
+          { label: "Scrape to PDF", text: "Convert the page to PDF format using Playwright" },
+          { label: "Auto-Upload", text: "PDF is automatically saved to current space for indexing" }
+        ]
+      },
+      {
+        icon: "📄",
+        title: "PDF Conversion",
+        color: "#10b981",
+        description: "Technical details of the scraping process:",
+        items: [
+          { label: "Playwright", text: "Uses headless browser for accurate rendering" },
+          { label: "Full Page", text: "Captures entire scrollable content, not just viewport" },
+          { label: "Auto-Naming", text: "PDF filename based on page title or URL" },
+          { label: "Background Job", text: "Scraping runs asynchronously (check Space page for result)" }
+        ]
+      },
+      {
+        icon: "⚠️",
+        title: "Preview Limitations",
+        color: "#f59e0b",
+        description: "Why some pages may not preview:",
+        items: [
+          { label: "X-Frame-Options", text: "Many sites block iframe embedding for security" },
+          { label: "Cross-Origin", text: "Browser security prevents accessing iframe content" },
+          { label: "Still Scrapable", text: "Preview failure doesn't affect PDF scraping ability" },
+          { label: "Warning Message", text: "Yellow banner indicates preview restrictions" }
+        ]
+      },
+      {
+        icon: "💡",
+        title: "Best Practices",
+        color: "#8b5cf6",
+        items: [
+          { label: "Public Pages", text: "Works best with publicly accessible content" },
+          { label: "Login Required", text: "Cannot scrape pages behind authentication" },
+          { label: "Dynamic Content", text: "JavaScript-heavy sites render fully before capture" },
+          { label: "Re-index", text: "After scraping, run indexing to make content searchable" }
+        ]
+      }
+    ]
+  };
+
   return (
     <div className="space-page" style={{ padding: '1.5rem', maxWidth: '1200px', margin: '0 auto' }}>
       {/* Header Section */}
-      <div className="page-header" style={{ marginBottom: '2rem' }}>
-        <h1 style={{ fontSize: '1.8rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
-          Web Page Scraper
-        </h1>
-        <div style={{ color: '#94a3b8' }}>
-          Capture web pages as PDFs for indexing in <strong>{currentBucket.name}</strong>
+      <div className="page-header" style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div style={{ flex: 1 }}>
+          <h1 style={{ fontSize: '1.8rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+            Web Page Scraper
+          </h1>
+          <div style={{ color: '#94a3b8' }}>
+            Capture web pages as PDFs for indexing in <strong>{currentBucket.name}</strong>
+          </div>
         </div>
+        <GuideModal title={guideContent.title} sections={guideContent.sections} />
       </div>
 
       {/* URL Input Section */}

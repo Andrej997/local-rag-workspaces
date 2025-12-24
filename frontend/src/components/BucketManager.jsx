@@ -85,14 +85,6 @@ export function BucketManager() {
         )}
       </div>
 
-      {currentBucket && currentBucket.config && (
-        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', padding: '0.5rem', borderTop: '1px solid var(--border)' }}>
-          <div><strong>Settings:</strong></div>
-          <div>Chunk Size: {currentBucket.config.chunk_size}</div>
-          <div>Model: {currentBucket.config.llm_model}</div>
-          <div>Temp: {currentBucket.config.temperature}</div>
-        </div>
-      )}
     </div>
   );
 }

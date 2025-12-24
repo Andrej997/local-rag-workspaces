@@ -52,8 +52,21 @@ export const searchAPI = {
 };
 
 export const visualizationAPI = {
-  // Support 'dim' parameter (default 2)
-  getData: (bucketName, dim = 2) => api.get(`/visualization/${bucketName}`, { params: { dim } }),
+  // Support 'dim' parameter (default 2), clustering, and number of clusters
+  getData: (bucketName, dim = 2, useClustering = false, nClusters = 8) =>
+    api.get(`/visualization/${bucketName}`, {
+      params: {
+        dim,
+        use_clustering: useClustering,
+        n_clusters: nClusters
+      }
+    }),
+  // Project a query into the document space
+  projectQuery: (bucketName, query, dim = 2) =>
+    api.post(`/visualization/${bucketName}/query-projection`, { query, dim }),
+  // Get similarity graph data
+  getSimilarityGraph: (bucketName, threshold = 0.8) =>
+    api.get(`/visualization/${bucketName}/similarity-graph`, { params: { threshold } }),
 };
 
 export const browseAPI = {

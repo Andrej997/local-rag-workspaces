@@ -84,11 +84,17 @@ async def chat(request: ChatRequest):
     llm_model = 'llama3.2'
     temperature = 0.7
     embedding_model = 'nomic-embed-text'
+    top_k = 5
+    enable_reranking = True
+    enable_hybrid_search = True
 
     if bucket and bucket.config:
         llm_model = bucket.config.llm_model
         temperature = bucket.config.temperature
         embedding_model = bucket.config.embedding_model
+        top_k = getattr(bucket.config, 'top_k', 5)
+        enable_reranking = getattr(bucket.config, 'enable_reranking', True)
+        enable_hybrid_search = getattr(bucket.config, 'enable_hybrid_search', True)
 
     # 2. Save User Message
     chat_manager.save_message(request.bucket_name, "user", request.query)
@@ -112,8 +118,9 @@ async def chat(request: ChatRequest):
                 collection_name=collection_name,
                 bucket_name=request.bucket_name,
                 embedding_model=embedding_model,
-                top_k=5,
-                enable_reranking=True
+                top_k=top_k,
+                enable_reranking=enable_reranking,
+                enable_hybrid_search=enable_hybrid_search
             )
 
         return await asyncio.to_thread(blocking_retrieval)

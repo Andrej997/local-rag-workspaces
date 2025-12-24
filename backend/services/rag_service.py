@@ -83,7 +83,8 @@ class RAGService:
         bucket_name: str,
         embedding_model: str = 'nomic-embed-text',
         top_k: int = 5,
-        enable_reranking: bool = True
+        enable_reranking: bool = True,
+        enable_hybrid_search: bool = True
     ) -> Tuple[List[dict], str]:
         """
         Perform advanced RAG retrieval combining multiple methods.
@@ -95,6 +96,7 @@ class RAGService:
             embedding_model: Model to use for vector embeddings
             top_k: Number of final results to return
             enable_reranking: Whether to apply cross-encoder reranking
+            enable_hybrid_search: Whether to include BM25 keyword search
 
         Returns:
             Tuple of (retrieved_chunks, context_string)
@@ -132,15 +134,16 @@ class RAGService:
         except Exception as e:
             logger.error(f"Vector search failed: {str(e)}")
 
-        # B. BM25 Keyword Search
-        try:
-            bm25 = BM25Service()
-            if bm25.load_from_minio(bucket_name):
-                keyword_results = bm25.search(query, top_k=20)
-                all_results.append(keyword_results)
-                logger.info(f"BM25 search returned {len(keyword_results)} results")
-        except Exception as e:
-            logger.warning(f"BM25 search failed: {str(e)}")
+        # B. BM25 Keyword Search (if enabled)
+        if enable_hybrid_search:
+            try:
+                bm25 = BM25Service()
+                if bm25.load_from_minio(bucket_name):
+                    keyword_results = bm25.search(query, top_k=20)
+                    all_results.append(keyword_results)
+                    logger.info(f"BM25 search returned {len(keyword_results)} results")
+            except Exception as e:
+                logger.warning(f"BM25 search failed: {str(e)}")
 
         # C. Fusion (RRF)
         candidates = self.reciprocal_rank_fusion(all_results)

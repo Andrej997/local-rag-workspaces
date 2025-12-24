@@ -7,6 +7,7 @@ import { ProgressDisplay } from './ProgressDisplay';
 import { FileViewer } from './FileViewer';
 import { FileTree } from './FileTree';
 import { UploadPanel } from './UploadPanel';
+import { GuideModal } from './GuideModal';
 
 export function SpacePage() {
   const { state, refreshBuckets } = useIndexing();
@@ -45,33 +46,91 @@ export function SpacePage() {
 
   const isRunning = indexingStatus?.is_running;
 
+  const guideContent = {
+    title: "Space Management Guide",
+    sections: [
+      {
+        icon: "📂",
+        title: "Content Sources",
+        color: "#3b82f6",
+        description: "Manage the documents and files that power your space:",
+        items: [
+          { label: "Upload Files", text: "Drag & drop or click to add individual files" },
+          { label: "Add Folders", text: "Upload entire directories for bulk processing" },
+          { label: "File Tree", text: "Browse and preview indexed content" },
+          { label: "Delete Sources", text: "Select items and remove unwanted files" }
+        ]
+      },
+      {
+        icon: "⚡",
+        title: "Indexing Process",
+        color: "#10b981",
+        description: "Transform your documents into searchable embeddings:",
+        steps: [
+          { label: "Upload Content", text: "Add files to your space first" },
+          { label: "Start Indexing", text: "Click 'Start Indexing' to process files" },
+          { label: "Monitor Progress", text: "Watch real-time updates in progress panel" },
+          { label: "Ready to Search", text: "Once complete, files are searchable in Chat" }
+        ]
+      },
+      {
+        icon: "🎯",
+        title: "Status Indicators",
+        color: "#f59e0b",
+        items: [
+          { label: "Green Badge", text: "Indexing currently running" },
+          { label: "Gray Badge", text: "System ready to start indexing" },
+          { label: "Progress Bar", text: "Shows percentage of files processed" },
+          { label: "Success Checkmark", text: "All files indexed successfully" }
+        ]
+      },
+      {
+        icon: "💡",
+        title: "Pro Tips",
+        color: "#8b5cf6",
+        items: [
+          { label: "Re-indexing", text: "Upload new files and run indexing again to add them" },
+          { label: "File Formats", text: "Supports .txt, .md, .pdf, .doc, .docx, and more" },
+          { label: "WebSocket Updates", text: "Progress updates stream in real-time" },
+          { label: "Stop Anytime", text: "You can safely stop indexing and resume later" }
+        ]
+      }
+    ]
+  };
+
   return (
     <div className="space-page" style={{ padding: '1.5rem', maxWidth: '1200px', margin: '0 auto' }}>
 
       {/* Header Section */}
       <div className="page-header" style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
+        <div style={{ flex: 1 }}>
           <h1 style={{ fontSize: '1.8rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>{currentBucket.name}</h1>
           <div style={{ color: '#94a3b8' }}>
             Manage content sources and indexing
           </div>
         </div>
 
-        {/* Indexing Status Badge */}
-        <div style={{
-          padding: '0.5rem 1rem',
-          borderRadius: '2rem',
-          background: isRunning ? 'rgba(16, 185, 129, 0.1)' : 'rgba(148, 163, 184, 0.1)',
-          border: isRunning ? '1px solid #10b981' : '1px solid #475569',
-          color: isRunning ? '#10b981' : '#94a3b8',
-          display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '500'
-        }}>
-          <div style={{
-            width: '8px', height: '8px', borderRadius: '50%',
-            background: isRunning ? '#10b981' : '#94a3b8',
-            boxShadow: isRunning ? '0 0 8px #10b981' : 'none'
-          }}></div>
-          {isRunning ? 'Indexing in Progress' : 'Ready to Index'}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <GuideModal title={guideContent.title} sections={guideContent.sections} />
+
+          {/* Indexing Status Badge - Only show when running */}
+          {isRunning && (
+            <div style={{
+              padding: '0.5rem 1rem',
+              borderRadius: '2rem',
+              background: 'rgba(16, 185, 129, 0.1)',
+              border: '1px solid #10b981',
+              color: '#10b981',
+              display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '500'
+            }}>
+              <div style={{
+                width: '8px', height: '8px', borderRadius: '50%',
+                background: '#10b981',
+                boxShadow: '0 0 8px #10b981'
+              }}></div>
+              Indexing in Progress
+            </div>
+          )}
         </div>
       </div>
 

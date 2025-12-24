@@ -82,10 +82,11 @@ class IndexingManager:
     def on_progress(self, **kwargs):
         event_type = kwargs.get("type", "progress")
 
-        # INTERCEPT COMPLETE EVENT to update stats
+        # INTERCEPT COMPLETE EVENT to update stats and save indexed metadata
         if event_type == 'complete':
             files_total = kwargs.get('files_total', 0)
             embedding_dim = kwargs.get('embedding_dim')
+            indexed_metadata = kwargs.get('indexed_metadata')
             bucket = bucket_manager.get_current_bucket()
             if bucket:
                 bucket_manager.update_stats(bucket.name, files_total)
@@ -93,6 +94,13 @@ class IndexingManager:
                 if embedding_dim and bucket.config:
                     bucket.config.embedding_dim = embedding_dim
                     bucket_manager._save_bucket_config(bucket)
+                # Save indexed files metadata for incremental indexing
+                if indexed_metadata:
+                    try:
+                        minio_service.put_json(bucket.name, "indexed_files_metadata.json", indexed_metadata)
+                        print(f"Saved indexed metadata for {len(indexed_metadata)} files")
+                    except Exception as e:
+                        print(f"Failed to save indexed metadata: {e}")
 
         event_data = {
             "type": event_type,
@@ -156,30 +164,38 @@ class IndexingManager:
             try:
                 print("DEBUG: Indexer thread started", flush=True)
                 # 1. Download files from MinIO to Cache
-                # from services.minio_service import minio_service # Moved to top
                 timestamp = int(datetime.utcnow().timestamp())
                 # Use /tmp to avoid Windows/Docker volume locking issues
                 cache_dir = f"/tmp/cache/{bucket.name}_{timestamp}"
-                
+
                 # No need to clean, it's new
                 os.makedirs(cache_dir, exist_ok=True)
-                
+
                 self.on_progress(type='downloading', message='Downloading files from MinIO (uploads/)...')
                 print(f"DEBUG: Downloading from {bucket.name} prefix='uploads/' to {cache_dir}", flush=True)
-                
+
                 # Download ONLY the 'uploads/' folder
                 minio_service.download_bucket(bucket.name, cache_dir, prefix="uploads/")
-                
+
                 # The files will be in data/cache/<bucket>_<timestamp>/uploads/...
                 # So we point the indexer to that subdirectory
                 target_dir = os.path.join(cache_dir, "uploads")
                 print(f"DEBUG: Target index dir: {target_dir}", flush=True)
-                
+
                 if not os.path.exists(target_dir):
                     print("DEBUG: Target dir does not exist even after download, creating (empty)", flush=True)
                     os.makedirs(target_dir, exist_ok=True) # Ensure it exists even if empty
 
-                # 2. Configure Indexer point to Cache
+                # 2. Load existing indexed files metadata for incremental indexing
+                indexed_files_metadata = {}
+                try:
+                    indexed_files_metadata = minio_service.get_json(bucket.name, "indexed_files_metadata.json")
+                    if indexed_files_metadata:
+                        print(f"DEBUG: Loaded metadata for {len(indexed_files_metadata)} previously indexed files", flush=True)
+                except Exception as e:
+                    print(f"DEBUG: No previous indexed metadata found: {e}", flush=True)
+
+                # 3. Configure Indexer point to Cache
                 # Get settings from bucket config
                 chunk_size = bucket.config.chunk_size if bucket.config else 1000
                 embedding_model = bucket.config.embedding_model if bucket.config else "nomic-embed-text"
@@ -193,11 +209,12 @@ class IndexingManager:
                     embedding_model=embedding_model,
                     embedding_dim=embedding_dim,
                     progress_callback=self.on_progress,
-                    error_callback=self.on_error
+                    error_callback=self.on_error,
+                    indexed_files_metadata=indexed_files_metadata  # Pass for incremental indexing
                 )
                 self.current_indexer = indexer
 
-                # 3. Run Indexer
+                # 4. Run Indexer
                 print("DEBUG: Running indexer", flush=True)
                 indexer.run()
                 print("DEBUG: Indexer run complete", flush=True)

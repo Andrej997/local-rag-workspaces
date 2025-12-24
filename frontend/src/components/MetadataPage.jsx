@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { metadataAPI } from '../services/api';
 import { useIndexing } from '../context/IndexingContext';
 import { useNotification } from '../context/NotificationContext';
+import { GuideModal } from './GuideModal';
 
 export function MetadataPage() {
   const { state } = useIndexing();
@@ -84,14 +85,73 @@ export function MetadataPage() {
     );
   }
 
+  const guideContent = {
+    title: "Metadata Guide",
+    sections: [
+      {
+        icon: "🗂️",
+        title: "What is Metadata?",
+        color: "#3b82f6",
+        description: "This page shows the internal structure of your vector database (Milvus):",
+        items: [
+          { label: "Collection", text: "Named container for your indexed documents in Milvus" },
+          { label: "Entities", text: "Individual document chunks stored as vectors" },
+          { label: "Schema", text: "Data structure defining fields (id, filename, content, embedding)" },
+          { label: "Indexes", text: "Optimized search structures for fast vector retrieval" }
+        ]
+      },
+      {
+        icon: "📊",
+        title: "Collection Details",
+        color: "#10b981",
+        description: "Understanding the displayed information:",
+        items: [
+          { label: "Total Entities", text: "Number of document chunks indexed (not original files)" },
+          { label: "Fields Count", text: "Number of data columns in the schema" },
+          { label: "Schema Fields", text: "id (primary key), filename, content (text), embedding (vector)" },
+          { label: "Sample Data", text: "Preview of first 10 indexed chunks" }
+        ]
+      },
+      {
+        icon: "🔍",
+        title: "Index Information",
+        color: "#f59e0b",
+        description: "Vector search optimization details:",
+        items: [
+          { label: "Field", text: "Which data field is indexed (typically 'embedding')" },
+          { label: "Type", text: "Index algorithm (e.g., HNSW, IVF_FLAT)" },
+          { label: "Metric", text: "Distance metric (e.g., COSINE, L2, IP)" },
+          { label: "HNSW", text: "Fast approximate nearest neighbor search" }
+        ]
+      },
+      {
+        icon: "💡",
+        title: "Use Cases",
+        color: "#8b5cf6",
+        steps: [
+          { label: "Verify Indexing", text: "Check if files were successfully indexed (entities > 0)" },
+          { label: "Inspect Schema", text: "Understand how data is stored and structured" },
+          { label: "Debug Issues", text: "Diagnose search problems by checking entity count" },
+          { label: "Technical Details", text: "For developers: view exact Milvus configuration" }
+        ]
+      }
+    ]
+  };
+
   return (
     <div style={{ padding: '1.5rem', height: '100%', overflowY: 'auto' }}>
-      <h1 style={{ marginBottom: '0.5rem', fontSize: '1.8rem' }}>
-        Metadata: <span style={{ color: 'var(--accent)' }}>{currentBucket.name}</span>
-      </h1>
-      <p style={{ color: '#6b7280', marginBottom: '1.5rem' }}>
-        Vector database collection metadata for this space
-      </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+        <div>
+          <h1 style={{ fontSize: '1.8rem', margin: 0, marginBottom: '0.5rem' }}>
+            Metadata: <span style={{ color: 'var(--accent)' }}>{currentBucket.name}</span>
+          </h1>
+          <p style={{ color: '#6b7280', margin: 0 }}>
+            Vector database collection metadata for this space
+          </p>
+        </div>
+        <GuideModal title={guideContent.title} sections={guideContent.sections} />
+      </div>
+      <div style={{ marginBottom: '1.5rem' }}></div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '1.5rem' }}>
         {/* Collections List */}

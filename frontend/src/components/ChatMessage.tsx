@@ -16,6 +16,20 @@ export function ChatMessage({ message }: ChatMessageProps) {
 
   const renderSources = (sources?: DocumentSource[]) => {
     if (!sources || sources.length === 0) return null;
+
+    // Check if all sources are from the same file
+    const uniqueFilenames = [...new Set(sources.map(s => s.filename))];
+    const allFromSameFile = uniqueFilenames.length === 1;
+
+    if (allFromSameFile) {
+      // Show only the file name when all sources are from the same file
+      return (
+        <div className="sources-container">
+          <div className="sources-title">📚 Source: {uniqueFilenames[0]}</div>
+        </div>
+      );
+    }
+
     return (
       <div className="sources-container">
         <div className="sources-title">📚 Used {sources.length} sources:</div>
