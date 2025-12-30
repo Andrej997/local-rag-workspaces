@@ -1,3 +1,5 @@
+[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/andrejkm)
+
 # Local RAG Workspaces
 
 A workspace-based Retrieval-Augmented Generation (RAG) system for private document chat with your files and codebases using local AI models. This local RAG solution enables you to organize multiple projects into isolated workspaces (also called "spaces" throughout the interface) and query them using vector search and large language models. Built with React, FastAPI, Milvus, and Ollama.
